@@ -48,15 +48,22 @@ def get_current_user(db: Session = Depends(get_db)):
 
 # === Auth Routes ===
 @app.post("/api/auth/register")
-async def register(email: str = Form(...), name: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+async def register(email: str = Form(...), name: str = Form(...), password: str = Form(...), trainer_code: str = Form(None), db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == email).first()
     if existing:
         raise HTTPException(400, "Email already registered")
-    user = User(email=email, name=name, hashed_password=bcrypt_lib.hashpw(password.encode(), bcrypt_lib.gensalt()).decode())
+    secret_code = os.getenv("TRAINER_CODE", "")
+    is_trainer = trainer_code and secret_code and trainer_code.strip() == secret_code.strip()
+    user = User(
+        email=email, name=name,
+        hashed_password=bcrypt_lib.hashpw(password.encode(), bcrypt_lib.gensalt()).decode(),
+        approved=is_trainer,
+        role='trainer' if is_trainer else 'client',
+    )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "email": user.email, "name": user.name}
+    return {"id": user.id, "email": user.email, "name": user.name, "approved": user.approved, "role": user.role}
 
 
 @app.post("/api/auth/login")
