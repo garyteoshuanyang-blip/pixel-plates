@@ -448,7 +448,7 @@ async function loadClientDetail() {
       const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
 
       const mealsHtml = d.meals.map(m => {
-        const photoHtml = m.photo_path ? `<img src="${m.photo_path}" class="cd-photo" onclick="window.open('${m.photo_path}')" loading="lazy">` : '';
+        const photoHtml = m.photo_path ? `<div class="cd-photo-wrap"><img src="${m.photo_path}" class="cd-photo" onclick="viewPhoto('${m.photo_path}')" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="cd-photo-fallback" style="display:none">📸</span></div>` : '';
         return `<div class="cd-meal">
           <div class="cd-meal-info">
             <span class="cd-meal-name">${m.food_name}</span>
@@ -476,6 +476,19 @@ async function loadClientDetail() {
   } catch(e) {
     container.innerHTML = '<p class="muted">Error loading client data</p>';
   }
+}
+
+// === PHOTO LIGHTBOX ===
+function viewPhoto(path) {
+  const lb = document.getElementById('photo-lightbox');
+  const img = document.getElementById('lightbox-img');
+  img.src = path;
+  img.onerror = function() { this.src = ''; this.alt = 'Photo not available'; };
+  lb.classList.remove('hidden');
+}
+function closePhoto() {
+  document.getElementById('photo-lightbox').classList.add('hidden');
+  document.getElementById('lightbox-img').src = '';
 }
 
 // === ADMIN PANEL ===
