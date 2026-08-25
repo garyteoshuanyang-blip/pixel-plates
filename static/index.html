@@ -163,6 +163,29 @@
       <div class="card" id="bonus-card" style="display:none"><div id="bonus-content"></div></div>
     </div>
 
+    <!-- EDIT MEAL MODAL -->
+    <div id="edit-modal" class="modal hidden">
+      <div class="modal-overlay" onclick="closeEditMeal()"></div>
+      <div class="modal-card">
+        <h2>✏️ Edit Meal</h2>
+        <form id="edit-meal-form">
+          <label>Food Name</label>
+          <input type="text" id="edit-food-name">
+          <label>Calories</label>
+          <input type="number" id="edit-calories" step="10">
+          <label>Protein (g)</label>
+          <input type="number" id="edit-protein" step="1">
+          <label>Carbs (g)</label>
+          <input type="number" id="edit-carbs" step="1">
+          <label>Fat (g)</label>
+          <input type="number" id="edit-fat" step="1">
+          <button type="submit" class="btn">💾 Save</button>
+          <button type="button" class="btn" style="background:var(--accent);margin-top:6px" onclick="closeEditMeal()">Cancel</button>
+        </form>
+        <p id="edit-error" class="error"></p>
+      </div>
+    </div>
+
     <!-- PAGE: LEADERBOARD -->
     <div id="page-leaderboard" class="page">
       <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
@@ -275,7 +298,12 @@
 ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
       </pre>
       <div class="page-header"><span>👥 My Clients</span></div>
+      <div class="card" id="mc-summary">
+        <h2>📊 Weekly Summary</h2>
+        <div id="mc-summary-list"><p class="muted">Loading...</p></div>
+      </div>
       <div class="card">
+        <h2>👤 All Clients</h2>
         <div id="mc-client-list"><p class="muted">Loading clients...</p></div>
       </div>
     </div>
@@ -291,6 +319,9 @@
           <button class="tab active" onclick="switchClientDays('7')">7 Days</button>
           <button class="tab" onclick="switchClientDays('14')">14 Days</button>
           <button class="tab" onclick="switchClientDays('30')">30 Days</button>
+        </div>
+        <div class="date-nav" style="margin:4px 0">
+          <input type="date" id="cd-date-picker" onchange="goToClientDate()" style="width:100%">
         </div>
         <div id="cd-list"></div>
       </div>

@@ -268,6 +268,7 @@ async function loadMeals() {
         <span class="cal">${m.calories}</span>
         <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span></span>
         <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
+        <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${m.calories},${m.protein},${m.carbs},${m.fat})">✏️</button>
         <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
       </div>`).join('');
   } catch(e) {}
@@ -388,7 +389,7 @@ async function loadLeaderboard() {
   } catch(e) {}
 }
 
-// === MY CLIENTS (trainer only) ===
+// === MY CLIENTS ===
 function viewClientDetail(clientId, clientName) {
   selectedClientId = clientId;
   document.getElementById('cd-client-name').textContent = '👤 ' + clientName;
@@ -400,11 +401,23 @@ function switchClientDays(days) {
   document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
   const idx = days === '7' ? 0 : days === '14' ? 1 : 2;
   document.querySelectorAll('#page-clientdetail .tab')[idx].classList.add('active');
+  // Set date picker to today
+  const dp = document.getElementById('cd-date-picker');
+  if (dp) dp.value = '';
   loadClientDetail();
 }
 
+function goToClientDate() {
+  const datePicker = document.getElementById('cd-date-picker');
+  if (!datePicker || !datePicker.value) return;
+  cdDays = 1;
+  loadClientDetail();
+}
+
+// Also update the client detail to include a date summary at top
 async function loadMyClients() {
   if (!currentUser) return;
+  loadTrainerSummary();
   const list = document.getElementById('mc-client-list');
   try {
     const resp = await fetch(API + '/api/trainer/clients/' + currentUser.user_id);
@@ -425,260 +438,88 @@ async function loadMyClients() {
   }
 }
 
-async function loadClientDetail() {
-  if (!currentUser || !selectedClientId) return;
-  const container = document.getElementById('cd-list');
-  try {
-    const resp = await fetch(API + `/api/trainer/client-detail/${selectedClientId}?days=${cdDays}`);
-    const data = await resp.json();
-    const client = data.client;
-    const days = data.days;
+// === EDIT MEAL ===
+let editingMealId = null;
 
-    if (!days.length) {
-      container.innerHTML = '<p class="muted">No meals logged in this period.</p>';
+function openEditMeal(id, name, cal, pro, carbs, fat) {
+  editingMealId = id;
+  document.getElementById('edit-food-name').value = name || '';
+  document.getElementById('edit-calories').value = cal || 0;
+  document.getElementById('edit-protein').value = pro || 0;
+  document.getElementById('edit-carbs').value = carbs || 0;
+  document.getElementById('edit-fat').value = fat || 0;
+  document.getElementById('edit-error').textContent = '';
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+function closeEditMeal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+  editingMealId = null;
+}
+
+document.getElementById('edit-meal-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!editingMealId) return;
+  const f = new FormData();
+  f.append('calories', document.getElementById('edit-calories').value);
+  f.append('protein', document.getElementById('edit-protein').value);
+  f.append('carbs', document.getElementById('edit-carbs').value);
+  f.append('fat', document.getElementById('edit-fat').value);
+  f.append('food_name', document.getElementById('edit-food-name').value);
+  try {
+    const resp = await fetch(API + '/api/meals/' + editingMealId, { method: 'PUT', body: f });
+    const data = await resp.json();
+    if (resp.ok) {
+      closeEditMeal();
+      loadMeals(); loadOverview();
+    } else {
+      document.getElementById('edit-error').textContent = data.detail || 'Error saving';
+    }
+  } catch(e) {
+    document.getElementById('edit-error').textContent = 'Connection error';
+  }
+});
+
+// === TRAINER SUMMARY ===
+async function loadTrainerSummary() {
+  if (!currentUser || currentUser.role !== 'trainer') return;
+  const container = document.getElementById('mc-summary-list');
+  if (!container) return;
+  try {
+    const resp = await fetch(API + '/api/trainer/summary/' + currentUser.user_id);
+    const data = await resp.json();
+    const clients = data.clients;
+    if (!clients.length) {
+      container.innerHTML = '<p class="muted">No data yet this week</p>';
       return;
     }
-
-    container.innerHTML = days.map(d => {
-      const calPct = Math.min(100, (d.calories / d.goal_calories) * 100);
-      const proPct = Math.min(100, (d.protein / d.goal_protein) * 100);
-      const carbPct = Math.min(100, (d.carbs / d.goal_carbs) * 100);
-      const fatPct = Math.min(100, (d.fat / d.goal_fat) * 100);
-      const status = d.goal_met ? '✅' : '❌';
-      const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
-
-      const mealsHtml = d.meals.map(m => {
-        const photoHtml = '';
-        return `<div class="cd-meal">
-          <div class="cd-meal-info">
-            <span class="cd-meal-name">${m.food_name}</span>
-            <span class="cd-meal-cal">${m.calories} cal</span>
-            <span class="cd-meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span>
-          </div>
-          ${photoHtml}
-        </div>`;
-      }).join('');
-
-      return `<div class="cd-day">
-        <div class="cd-day-header">
-          <span><strong>${dateLabel}</strong> ${status}</span>
-          <span class="cd-day-pts">🏆 ${d.total_points} pts</span>
+    container.innerHTML = clients.map(c => {
+      const barW = Math.min(100, c.hit_rate);
+      const streakEmoji = c.streak >= 5 ? '🔥' : c.streak >= 3 ? '⚡' : '📅';
+      return `<div class="summary-row">
+        <div class="summary-left">
+          <span class="summary-name">${c.name}</span>
+          <span class="summary-streak">${streakEmoji} ${c.streak}d streak</span>
         </div>
-        <div class="cd-day-macros">
-          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${d.calories}/${d.goal_calories}</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${d.protein}/${d.goal_protein}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${d.carbs}/${d.goal_carbs}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${d.fat}/${d.goal_fat}g</span></div>
+        <div class="summary-right">
+          <span class="summary-pts">🏆 ${c.total_points}</span>
+          <div class="summary-bar-bg"><div class="summary-bar-fill" style="width:${barW}%"></div></div>
+          <span class="summary-pct">${c.hit_rate}%</span>
         </div>
-        ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
     }).join('');
   } catch(e) {
-    container.innerHTML = '<p class="muted">Error loading client data</p>';
+    container.innerHTML = '<p class="muted">Could not load summary</p>';
   }
 }
 
-// === ADMIN PANEL ===
-async function loadAdminPanel() {
-  const panel = document.getElementById('admin-panel');
-  if (!panel) return;
-  panel.classList.remove('hidden');
-  const list = document.getElementById('admin-pending-list');
-  try {
-    const resp = await fetch(API + '/api/admin/pending-users');
-    const users = await resp.json();
-    if (!users.length) {
-      list.innerHTML = '<p class="muted">No pending requests</p>';
-      return;
-    }
-    list.innerHTML = users.map(u => `
-      <div class="admin-user-row">
-        <span class="admin-user-info"><strong>${u.name}</strong> · ${u.email}</span>
-        <span class="admin-user-date">${u.created_at ? new Date(u.created_at).toLocaleDateString() : ''}</span>
-        <div class="admin-user-actions">
-          <button class="admin-btn admin-btn-approve" onclick="approveUser(${u.id})">✅ Approve</button>
-          <button class="admin-btn admin-btn-deny" onclick="denyUser(${u.id})">❌ Deny</button>
-        </div>
-      </div>
-    `).join('');
-  } catch(e) {
-    list.innerHTML = '<p class="muted">Could not load</p>';
-  }
-}
-
-async function approveUser(id) {
-  try {
-    const resp = await fetch(API + '/api/admin/approve/' + id, { method: 'POST' });
-    if (resp.ok) loadAdminPanel();
-  } catch(e) {}
-}
-
-async function denyUser(id) {
-  if (!confirm('Remove this user?')) return;
-  try {
-    const resp = await fetch(API + '/api/admin/deny/' + id, { method: 'POST' });
-    if (resp.ok) loadAdminPanel();
-  } catch(e) {}
-}
-
-// === PROFILE ===
-async function loadProfile() {
+// Override loadMyClients to also load summary
+const origLoadMyClients = loadMyClients;
+loadMyClients = function() {
   if (!currentUser) return;
-  try {
-    const resp = await fetch(API + '/api/user/' + currentUser.user_id);
-    const d = await resp.json();
-    if (!resp.ok) return;
-    document.getElementById('prof-email').textContent = d.email;
-    document.getElementById('prof-name').textContent = d.name;
-    document.getElementById('prof-role').textContent = d.role === 'trainer' ? '👑 Trainer' : 'Client';
-    document.getElementById('prof-points').textContent = d.total_points || 0;
-    document.getElementById('prof-stats').innerHTML =
-      `<p>Age: <strong>${d.age}</strong></p>
-       <p>Height: <strong>${d.height_cm} cm</strong></p>
-       <p>Weight: <strong>${d.weight_kg} kg</strong></p>
-       <p>Gender: <strong>${d.gender}</strong></p>
-       <p>Activity: <strong>${d.activity_label || d.activity_level}</strong></p>
-       <p>Goal: <strong>${d.goal_label || d.goal_type}</strong></p>
-       <p>TDEE: <strong>${d.tdee} cal</strong> → Daily: <strong>${d.daily_calorie_goal} cal</strong></p>`;
-
-    const p = d.protein_pct || 30;
-    const c = d.carbs_pct || 40;
-    const f2 = d.fat_pct || 30;
-    const cal = d.daily_calorie_goal || 2000;
-
-    document.getElementById('prof-macro-sliders').innerHTML =
-      `<div class="macro-slider-row"><label><span style="color:var(--accent)">🥩 Protein</span><span id="slider-p-val">${p}%</span></label>
-        <input type="range" id="slider-p" min="10" max="80" value="${p}" oninput="updateSliders()"></div>
-       <div class="macro-slider-row"><label><span style="color:var(--gold)">🍚 Carbs</span><span id="slider-c-val">${c}%</span></label>
-        <input type="range" id="slider-c" min="5" max="80" value="${c}" oninput="updateSliders()"></div>
-       <div class="macro-slider-row"><label><span style="color:var(--accent2)">🧈 Fat</span><span id="slider-f-val">${f2}%</span></label>
-        <input type="range" id="slider-f" min="5" max="60" value="${f2}" oninput="updateSliders()"></div>
-       <div id="macro-slider-preview" style="margin-top:6px;font-size:12px;color:var(--text-dim);text-align:center">
-        ${p}% P · ${c}% C · ${f2}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f2/100/9)}g</div>`;
-    // Store actual daily goal for slider preview
-    window._userDailyGoal = d.daily_calorie_goal || 2000;
-
-    // Show/hide My Clients nav button + admin panel based on role
-    const clientsBtn = document.getElementById('nav-myclients');
-    if (clientsBtn) {
-      clientsBtn.style.display = d.role === 'trainer' ? 'block' : 'none';
-    }
-    if (d.role === 'trainer') {
-      loadAdminPanel();
-    }
-  } catch(e) {}
-}
-
-function updateSliders() {
-  let p = parseInt(document.getElementById('slider-p').value);
-  let c = parseInt(document.getElementById('slider-c').value);
-  let f = parseInt(document.getElementById('slider-f').value);
-  const total = p + c + f;
-  if (total > 100) {
-    const excess = total - 100;
-    if (p >= c && p >= f) p = Math.max(10, p - excess);
-    else if (c >= p && c >= f) c = Math.max(5, c - excess);
-    else f = Math.max(5, f - excess);
-  }
-  document.getElementById('slider-p').value = p; document.getElementById('slider-c').value = c; document.getElementById('slider-f').value = f;
-  document.getElementById('slider-p-val').textContent = p + '%';
-  document.getElementById('slider-c-val').textContent = c + '%';
-  document.getElementById('slider-f-val').textContent = f + '%';
-  // Use actual goal from user profile or default
-  const cal = window._userDailyGoal || 2000;
-  document.getElementById('macro-slider-preview').textContent =
-    `${p}% P · ${c}% C · ${f}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f/100/9)}g`;
-}
-
-async function saveMacros() {
-  const p = parseInt(document.getElementById('slider-p').value);
-  const c = parseInt(document.getElementById('slider-c').value);
-  const f = parseInt(document.getElementById('slider-f').value);
-  if (p + c + f !== 100) {
-    document.getElementById('macro-save-status').textContent = `⚠️ Must be 100% (${p+c+f}%)`; return; }
-  const form = new FormData();
-  form.append('user_id', currentUser.user_id);
-  form.append('protein_pct', p); form.append('carbs_pct', c); form.append('fat_pct', f);
-  try {
-    const resp = await fetch(API + '/api/macros', { method: 'POST', body: form });
-    if (resp.ok) {
-      document.getElementById('macro-save-status').textContent = '✅ Saved!';
-      document.getElementById('macro-save-status').style.color = 'var(--success)';
-      setTimeout(() => document.getElementById('macro-save-status').textContent = '', 3000);
-    } else { document.getElementById('macro-save-status').textContent = (await resp.json()).detail || 'Error'; }
-  } catch(e) { document.getElementById('macro-save-status').textContent = 'Connection error'; }
-}
-
-// === ANALYTICS CHART ===
-function switchChart(range) {
-  chartRange = range;
-  document.querySelectorAll('#page-analytics .tab').forEach(t => t.classList.remove('active'));
-  const tabs = document.querySelectorAll('#page-analytics .tab');
-  const idx = range === 'week' ? 0 : range === 'month' ? 1 : 2;
-  tabs[idx].classList.add('active');
-  loadChart();
-}
-
-async function loadChart() {
-  if (!currentUser) return;
-  try {
-    const resp = await fetch(API + `/api/history/${currentUser.user_id}?range=${chartRange}`);
-    const data = await resp.json();
-    drawChart(data);
-    const met = data.filter(d => d.goal_met).length;
-    const total = data.filter(d => d.calories > 0).length;
-    const avg = total > 0 ? Math.round(data.filter(d => d.calories > 0).reduce((s,d) => s+d.calories, 0) / total) : 0;
-    document.getElementById('chart-summary').textContent =
-      `📊 Days tracked: ${total} · Goal met: ${met} · Avg: ${avg} cal/day`;
-  } catch(e) {}
-}
-
-function drawChart(data) {
-  const canvas = document.getElementById('chart-canvas');
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  if (!data.length) {
-    ctx.fillStyle = '#8899aa'; ctx.font = '14px Inter'; ctx.textAlign = 'center';
-    ctx.fillText('No data yet — log some meals!', w/2, h/2);
-    return;
-  }
-
-  const pad = {top: 20, bottom: 25, left: 35, right: 10};
-  const cx = w - pad.left - pad.right;
-  const cy = h - pad.top - pad.bottom;
-
-  const maxCal = Math.max(...data.map(d => Math.max(d.calories, d.goal || 2000))) * 1.15;
-  const barW = Math.min(16, cx / data.length - 3);
-
-  ctx.strokeStyle = '#2a3a5e'; ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = pad.top + cy * (1 - i/4);
-    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(w - pad.right, y); ctx.stroke();
-    ctx.fillStyle = '#8899aa'; ctx.font = '9px Inter'; ctx.textAlign = 'right';
-    ctx.fillText(Math.round(maxCal * i / 4), pad.left - 5, y + 3);
-  }
-
-  if (data[0].goal) {
-    const goalY = pad.top + cy * (1 - data[0].goal / maxCal);
-    ctx.strokeStyle = '#0f9b8e'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(pad.left, goalY); ctx.lineTo(w - pad.right, goalY); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = '#0f9b8e'; ctx.font = '9px Inter'; ctx.textAlign = 'left';
-    ctx.fillText('Goal', w - pad.right - 30, goalY - 3);
-  }
-
-  data.forEach((d, i) => {
-    const x = pad.left + i * (barW + 3) + cx / data.length / 2 - barW / 2;
-    const barH = (d.calories / maxCal) * cy;
-    const y = pad.top + cy - barH;
-    ctx.fillStyle = d.goal_met ? '#4ade80' : '#e94560';
-    ctx.fillRect(x, y, barW, barH);
-    ctx.fillStyle = '#8899aa'; ctx.font = '8px Inter'; ctx.textAlign = 'center';
-    if (data.length <= 8) ctx.fillText(d.label, x + barW/2, h - 5);
-  });
-}
+  loadTrainerSummary();
+  origLoadMyClients();
+};
 
 // Auto refresh
 setInterval(() => {

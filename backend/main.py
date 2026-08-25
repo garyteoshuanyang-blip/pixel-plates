@@ -697,6 +697,65 @@ async def delete_meal(meal_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+# === Edit Meal ===
+
+
+@app.put("/api/meals/{meal_id}")
+async def edit_meal(
+    meal_id: int,
+    calories: float = Form(None),
+    protein: float = Form(None),
+    carbs: float = Form(None),
+    fat: float = Form(None),
+    food_name: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    meal = db.query(Meal).filter(Meal.id == meal_id).first()
+    if not meal:
+        raise HTTPException(404, "Meal not found")
+
+    if food_name is not None:
+        meal.food_name = food_name
+    if calories is not None:
+        meal.user_calories = calories
+        meal.user_protein = protein
+        meal.user_carbs = carbs
+        meal.user_fat = fat
+
+    db.commit()
+
+    # Recalc the daily log + points for the day this meal belongs to
+    user_id = meal.user_id
+    from datetime import timedelta as td, time as dtime
+    meal_utc = meal.created_at
+    today_sg = meal_utc.replace(tzinfo=timezone.utc).astimezone(SGT).date()
+    daily = db.query(DailyLog).filter(DailyLog.user_id == user_id, DailyLog.date == today_sg).first()
+    if daily:
+        sg_start = datetime.combine(today_sg, dtime.min, tzinfo=SGT)
+        sg_end = sg_start + td(days=1)
+        utc_start = sg_start.astimezone(timezone.utc).replace(tzinfo=None)
+        utc_end = sg_end.astimezone(timezone.utc).replace(tzinfo=None)
+        meals = db.query(Meal).filter(Meal.user_id == user_id, Meal.created_at >= utc_start, Meal.created_at < utc_end).all()
+        daily.total_calories = sum(m.user_calories or m.ai_calories or 0 for m in meals)
+        daily.total_protein = sum(m.user_protein or m.ai_protein or 0 for m in meals)
+        daily.total_carbs = sum(m.user_carbs or m.ai_carbs or 0 for m in meals)
+        daily.total_fat = sum(m.user_fat or m.ai_fat or 0 for m in meals)
+        daily.meal_count = len(meals)
+        daily.goal_met = daily.total_calories <= daily.goal_calories if daily.goal_calories else False
+        update_daily_points(daily, db)
+        db.commit()
+
+    return {
+        "ok": True,
+        "meal_id": meal.id,
+        "food_name": meal.food_name,
+        "calories": meal.user_calories or meal.ai_calories or 0,
+        "protein": meal.user_protein or meal.ai_protein or 0,
+        "carbs": meal.user_carbs or meal.ai_carbs or 0,
+        "fat": meal.user_fat or meal.ai_fat or 0,
+    }
+
+
 # === Dashboard ===
 @app.get("/api/dashboard/{user_id}")
 async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
@@ -909,6 +968,54 @@ async def check_streak(user_id: int = Form(...), db: Session = Depends(get_db)):
         db.commit()
         return {"bonus": bonus, "credits": user.credits, "message": message, "streak": streak}
     return {"bonus": 0, "credits": user.credits, "message": "", "streak": streak}
+
+
+# === Trainer Summary Dashboard ===
+
+
+@app.get("/api/trainer/summary/{trainer_id}")
+async def get_trainer_summary(trainer_id: int, db: Session = Depends(get_db)):
+    """Weekly summary for all clients: streak, hit rate, points."""
+    from datetime import timedelta
+    today = datetime.now(SGT).date()
+    week_start = today - timedelta(days=7)
+
+    clients = db.query(User).filter(User.role == 'client', User.approved == True).all()
+    result = []
+    for c in clients:
+        logs = db.query(DailyLog).filter(
+            DailyLog.user_id == c.id,
+            DailyLog.date >= week_start,
+            DailyLog.date <= today,
+        ).order_by(DailyLog.date.asc()).all()
+
+        days_logged = sum(1 for l in logs if (l.total_calories or 0) > 0)
+        days_met = sum(1 for l in logs if l.goal_met)
+        total_points = sum(l.total_points or 0 for l in logs)
+
+        # Streak (current)
+        streak = 0
+        check = today
+        while True:
+            l = db.query(DailyLog).filter(DailyLog.user_id == c.id, DailyLog.date == check).first()
+            if l and l.goal_met:
+                streak += 1
+                check -= timedelta(days=1)
+            else:
+                break
+
+        result.append({
+            "user_id": c.id,
+            "name": c.name,
+            "streak": streak,
+            "days_logged": days_logged,
+            "days_met": days_met,
+            "total_days": 7,
+            "hit_rate": round(days_met / 7 * 100) if days_logged > 0 else 0,
+            "total_points": total_points,
+        })
+
+    return {"clients": result, "week_start": str(week_start), "week_end": str(today)}
 
 
 # === Serve Frontend ===
