@@ -555,6 +555,8 @@ async function loadProfile() {
         <input type="range" id="slider-f" min="5" max="60" value="${f2}" oninput="updateSliders()"></div>
        <div id="macro-slider-preview" style="margin-top:6px;font-size:12px;color:var(--text-dim);text-align:center">
         ${p}% P · ${c}% C · ${f2}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f2/100/9)}g</div>`;
+    // Store actual daily goal for slider preview
+    window._userDailyGoal = d.daily_calorie_goal || 2000;
 
     // Show/hide My Clients nav button + admin panel based on role
     const clientsBtn = document.getElementById('nav-myclients');
@@ -582,7 +584,8 @@ function updateSliders() {
   document.getElementById('slider-p-val').textContent = p + '%';
   document.getElementById('slider-c-val').textContent = c + '%';
   document.getElementById('slider-f-val').textContent = f + '%';
-  const cal = 2211;
+  // Use actual goal from user profile or default
+  const cal = window._userDailyGoal || 2000;
   document.getElementById('macro-slider-preview').textContent =
     `${p}% P · ${c}% C · ${f}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f/100/9)}g`;
 }

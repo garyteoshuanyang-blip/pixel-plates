@@ -172,12 +172,16 @@ async def get_my_clients(trainer_id: int, db: Session = Depends(get_db)):
         User.role == 'client',
         User.approved == True,
     ).all()
-    return [{
-        "id": c.id,
-        "name": c.name,
-        "email": c.email,
-        "total_points": c.total_points or 0,
-    } for c in clients]
+    result = []
+    for c in clients:
+        pts = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == c.id).scalar() or 0
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "email": c.email,
+            "total_points": int(pts),
+        })
+    return result
 
 
 @app.get("/api/trainer/client-detail/{client_id}")
@@ -534,6 +538,7 @@ async def create_meal(
 
     photo_path = None
     ai_calories = 0
+    result = {}
 
     if photo and photo.filename:
         ext = os.path.splitext(photo.filename)[1] or ".jpg"
@@ -552,6 +557,9 @@ async def create_meal(
         # Text fallback
         result = await analyze_food_text(food_name)
         ai_calories = result.get("total_calories", 0)
+
+    if not photo and not food_name:
+        raise HTTPException(400, "Either a photo or food name is required")
 
     # Use AI estimate or user-provided value
     final_calories = calories if calories is not None else ai_calories
