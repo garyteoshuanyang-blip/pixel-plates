@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Pixel Plates 🎮</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="container" id="app">
+
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen" class="screen active">
+    <div class="splash">
+      <pre class="pixel-logo">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <p class="subtitle">Snap. Track. Level up.</p>
+    </div>
+    <div class="card">
+      <div class="tab-bar">
+        <button class="tab active" onclick="showAuthTab('login')">Log In</button>
+        <button class="tab" onclick="showAuthTab('register')">Sign Up</button>
+      </div>
+      <form id="login-form" class="auth-form">
+        <input type="email" id="login-email" placeholder="Email" required>
+        <input type="password" id="login-password" placeholder="Password" required>
+        <button type="submit" class="btn">▶ Log In</button>
+        <p id="login-error" class="error"></p>
+      </form>
+      <form id="register-form" class="auth-form hidden">
+        <input type="text" id="reg-name" placeholder="Your Name" required>
+        <input type="email" id="reg-email" placeholder="Email" required>
+        <input type="password" id="reg-password" placeholder="Password (min 4 chars)" required>
+        <div class="trainer-code-toggle" onclick="document.getElementById('trainer-code-field').classList.toggle('hidden')">+ Trainer code (optional)</div>
+        <input type="text" id="reg-trainer-code" class="hidden" placeholder="Trainer secret code">
+        <button type="submit" class="btn">✨ Sign Up</button>
+        <p id="reg-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- PENDING APPROVAL SCREEN -->
+  <div id="pending-screen" class="screen">
+    <div class="splash" style="margin-top:60px">
+      <div style="font-size:60px;margin-bottom:16px">⏳</div>
+      <h2 style="color:var(--gold);margin-bottom:8px">Account Pending Approval</h2>
+      <p class="subtitle">Your trainer needs to activate your account before you can start tracking.</p>
+      <p class="subtitle" style="margin-top:12px;font-size:11px">Check back later or remind your trainer!</p>
+      <button class="btn" style="margin-top:24px;max-width:200px" onclick="checkPendingApproval()">🔄 Check Again</button>
+      <button class="btn" style="margin-top:8px;background:var(--accent)" onclick="logoutUser()">🚪 Back to Login</button>
+      <p id="pending-status" class="goal-label" style="margin-top:8px"></p>
+    </div>
+  </div>
+
+  <!-- ONBOARD SCREEN -->
+  <div id="onboard-screen" class="screen">
+    <div class="card">
+      <h2>🧮 Your Stats</h2>
+      <form id="onboard-form">
+        <label>Age</label><input type="number" id="o-age" min="10" max="120" required>
+        <label>Height (cm)</label><input type="number" id="o-height" min="100" max="250" required>
+        <label>Weight (kg)</label><input type="number" id="o-weight" min="30" max="300" step="0.1" required>
+        <label>Gender</label>
+        <select id="o-gender"><option value="male">Male</option><option value="female">Female</option></select>
+        <label>Activity</label>
+        <select id="o-activity">
+          <option value="sedentary">Sedentary (desk job)</option>
+          <option value="light">Light (1-3 days/week)</option>
+          <option value="moderate">Moderate (3-5 days/week)</option>
+          <option value="very">Very Active (6-7 days/week)</option>
+          <option value="extreme">Extreme (athlete)</option>
+        </select>
+        <label>Goal</label>
+        <select id="o-goal">
+          <option value="lose">Lose Weight (−500 cal/day)</option>
+          <option value="maintain">Maintain Weight</option>
+          <option value="gain">Gain Muscle (+200 cal/day)</option>
+        </select>
+        <button type="submit" class="btn">▶ Calculate My Targets</button>
+      </form>
+      <div id="onboard-result" class="hidden result-card">
+        <p>TDEE: <strong id="o-tdee"></strong> cal/day</p>
+        <p>Goal: <strong id="o-goal-val"></strong> cal/day</p>
+        <p id="o-goal-label" class="goal-label"></p>
+        <div id="macro-bars-onboard" style="margin-top:8px"></div>
+        <button class="btn" onclick="showScreen('app');goPage('overview')" style="margin-top:12px">▶ Start Tracking!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP PAGES -->
+  <div id="app-screen" class="screen">
+
+    <!-- PAGE: OVERVIEW (default) -->
+    <div id="page-overview" class="page active">
+      <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <div class="page-header">
+        <span>📊 <span id="ov-name"></span></span>
+        <div class="top-stats">
+          <span>⭐ <span id="ov-streak">0</span></span>
+          <span>🏆 <span id="ov-points">0</span></span>
+          <span>💰 <span id="ov-credits">0</span></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>🔥 Today's Calories</h2>
+        <div class="progress-bar"><div class="progress-fill" id="ov-cal-progress" style="width:0%"></div></div>
+        <div class="cal-display"><span id="ov-cal">0</span> / <span id="ov-goal">2000</span></div>
+        <p id="ov-status" class="goal-label">Log a meal to start!</p>
+      </div>
+
+      <div class="card">
+        <h2>🥩 Macros Left</h2>
+        <div id="ov-macros"></div>
+      </div>
+
+      <div class="card">
+        <h2>📸 Log a Meal</h2>
+        <form id="meal-form">
+          <div class="photo-upload-row">
+            <div class="photo-upload" onclick="document.getElementById('meal-photo-camera').click()">
+              <span>📸 Camera</span>
+              <input type="file" id="meal-photo-camera" accept="image/*" capture="environment" hidden>
+            </div>
+            <div class="photo-upload" onclick="document.getElementById('meal-photo-gallery').click()">
+              <span>🖼️ Gallery</span>
+              <input type="file" id="meal-photo-gallery" accept="image/*" hidden>
+            </div>
+          </div>
+          <div id="photo-preview" style="text-align:center;font-size:12px;color:var(--text-dim);margin-top:4px"></div>
+          <div class="or-divider">— or type —</div>
+          <input type="text" id="meal-name" placeholder="e.g. Chicken rice, 1 plate">
+          <button type="submit" class="btn">➕ Log Meal</button>
+        </form>
+        <div id="meal-result" class="hidden result-card"><p id="meal-result-text"></p></div>
+      </div>
+
+      <div class="card">
+        <h2>📋 Today's Meals</h2>
+        <div id="ov-meals"><p class="muted">No meals logged yet</p></div>
+      </div>
+
+      <div class="card" id="bonus-card" style="display:none"><div id="bonus-content"></div></div>
+    </div>
+
+    <!-- PAGE: LEADERBOARD -->
+    <div id="page-leaderboard" class="page">
+      <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <div class="page-header"><span>🏆 Leaderboard</span></div>
+      <div class="card">
+        <div class="tab-bar" style="margin-bottom:8px">
+          <button class="tab active" onclick="switchLeaderboard('daily')">Daily</button>
+          <button class="tab" onclick="switchLeaderboard('weekly')">Weekly</button>
+          <button class="tab" onclick="switchLeaderboard('monthly')">Monthly</button>
+          <button class="tab" onclick="switchLeaderboard('yearly')">Yearly</button>
+        </div>
+        <div id="lb-my-rank" class="my-rank-card"></div>
+        <div id="lb-list" class="leaderboard-list"><p class="muted">Loading...</p></div>
+        <div class="challenge-rules">
+          <p>🏆 <strong>Challenge Rules</strong></p>
+          <p>🎯 Hit calorie goal = <strong>+10 pts</strong></p>
+          <p>🥩 Hit protein goal = <strong>+5 pts</strong></p>
+          <p>🍚 Hit carbs goal = <strong>+5 pts</strong></p>
+          <p>🧈 Hit fat goal = <strong>+5 pts</strong></p>
+          <p>Max <strong>25 pts/day</strong></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: ANALYTICS -->
+    <div id="page-analytics" class="page">
+      <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <div class="page-header"><span>📈 Analytics</span></div>
+      <div class="card">
+        <div class="tab-bar" style="margin-bottom:4px">
+          <button class="tab active" onclick="switchChart('week')">Week</button>
+          <button class="tab" onclick="switchChart('month')">Month</button>
+          <button class="tab" onclick="switchChart('year')">Year</button>
+        </div>
+        <div style="position:relative">
+          <canvas id="chart-canvas" width="440" height="200"></canvas>
+        </div>
+        <div id="chart-summary" style="margin-top:8px;font-size:13px;color:var(--text-dim);text-align:center"></div>
+      </div>
+    </div>
+
+    <!-- PAGE: PROFILE -->
+    <div id="page-profile" class="page">
+      <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <div class="page-header"><span>👤 Profile</span></div>
+
+      <div class="card">
+        <h2>📧 Account</h2>
+        <p>Email: <strong id="prof-email"></strong></p>
+        <p>Name: <strong id="prof-name"></strong></p>
+        <p>Role: <strong id="prof-role"></strong></p>
+        <p>🏆 Total Points: <strong id="prof-points">0</strong></p>
+      </div>
+
+      <div class="card">
+        <h2>🧮 Body Stats</h2>
+        <div id="prof-stats"></div>
+        <button class="btn" style="margin-top:8px" onclick="reOnboard()">✏️ Update Stats</button>
+      </div>
+
+      <div class="card">
+        <h2>🎛️ Macro Split</h2>
+        <p class="subtitle">Drag to adjust your protein / carbs / fat %</p>
+        <div id="prof-macro-sliders"></div>
+        <button class="btn" onclick="saveMacros()" style="margin-top:8px">💾 Save</button>
+        <p id="macro-save-status" class="goal-label" style="margin-top:4px"></p>
+      </div>
+
+      <!-- ADMIN PANEL (trainer only) -->
+      <div id="admin-panel" class="card hidden">
+        <h2>👥 Pending Clients</h2>
+        <p class="subtitle">Approve or deny new sign-ups</p>
+        <div id="admin-pending-list"><p class="muted">No pending requests</p></div>
+      </div>
+
+      <div class="card">
+        <button class="btn" style="background:var(--accent)" onclick="logoutUser()">🚪 Log Out</button>
+      </div>
+    </div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav">
+      <button class="nav-btn active" data-page="overview" onclick="goPage('overview')">📊 Overview</button>
+      <button class="nav-btn" data-page="leaderboard" onclick="goPage('leaderboard')">🏆 Leaderboard</button>
+      <button class="nav-btn" data-page="analytics" onclick="goPage('analytics')">📈 Trends</button>
+      <button class="nav-btn" data-page="profile" onclick="goPage('profile')">👤 Profile</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
