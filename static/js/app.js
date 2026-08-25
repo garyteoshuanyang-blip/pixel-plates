@@ -381,8 +381,8 @@ async function loadLeaderboard() {
 
 // === ADMIN PANEL ===
 async function loadAdminPanel() {
-  if (!currentUser || currentUser.role !== 'trainer') return;
   const panel = document.getElementById('admin-panel');
+  if (!panel) return;
   panel.classList.remove('hidden');
   const list = document.getElementById('admin-pending-list');
   try {
