@@ -43,6 +43,20 @@ def check_and_migrate():
         for col in ['points_calories', 'points_protein', 'points_carbs', 'points_fat', 'total_points']:
             if col not in daily_cols:
                 conn.execute(sql_text(f"ALTER TABLE daily_logs ADD COLUMN {col} INTEGER DEFAULT 0"))
+    # Auto-promote designated trainer email
+    trainer_email = os.getenv("TRAINER_EMAIL", "")
+    if trainer_email:
+        with engine.begin() as conn:
+            from sqlalchemy import text as sql_text
+            conn.execute(
+                sql_text("UPDATE users SET approved = TRUE, role = 'trainer' WHERE email = :email AND role != 'trainer'"),
+                {"email": trainer_email}
+            )
+            result = conn.execute(sql_text("SELECT COUNT(*) as c FROM users WHERE email = :email AND role = 'trainer'"), {"email": trainer_email})
+            row = result.fetchone()
+            if row and row[0] > 0:
+                print(f"✅ Trainer auto-promoted: {trainer_email}")
+    
     print("✅ DB migration checked — all columns present")
 
 
