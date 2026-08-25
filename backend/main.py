@@ -20,6 +20,40 @@ from backend.services.vision import analyze_food_photo, analyze_food_text
 
 app = FastAPI(title="Pixel Plates")
 
+
+# === Auto-migration for new columns on existing PostgreSQL ===
+
+
+def check_and_migrate():
+    """Add missing columns to existing tables without dropping data."""
+    from sqlalchemy import inspect, text as sql_text
+    engine = SessionLocal().bind
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        # Users table
+        users_cols = [c['name'] for c in inspector.get_columns('users')]
+        if 'approved' not in users_cols:
+            conn.execute(sql_text("ALTER TABLE users ADD COLUMN approved BOOLEAN DEFAULT FALSE"))
+        if 'role' not in users_cols:
+            conn.execute(sql_text("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'client'"))
+        if 'total_points' not in users_cols:
+            conn.execute(sql_text("ALTER TABLE users ADD COLUMN total_points INTEGER DEFAULT 0"))
+        # DailyLog table
+        daily_cols = [c['name'] for c in inspector.get_columns('daily_logs')]
+        for col in ['points_calories', 'points_protein', 'points_carbs', 'points_fat', 'total_points']:
+            if col not in daily_cols:
+                conn.execute(sql_text(f"ALTER TABLE daily_logs ADD COLUMN {col} INTEGER DEFAULT 0"))
+    print("✅ DB migration checked — all columns present")
+
+
+@app.on_event("startup")
+async def startup():
+    check_and_migrate()
+
+
+# === Configuration ===
+
+
 SECRET_KEY = os.getenv("SECRET_KEY", "pixel-plates-dev-key-change-in-production")
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
