@@ -609,7 +609,12 @@ async def create_meal(
     db.commit()
     db.refresh(meal)
 
-
+    # Delete photo after AI analysis (no storage retention)
+    if photo_path and os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+        except:
+            pass
 
     return {
         "meal_id": meal.id,
