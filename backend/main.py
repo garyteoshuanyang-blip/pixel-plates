@@ -185,11 +185,22 @@ async def get_my_clients(trainer_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/trainer/client-detail/{client_id}")
-async def get_client_detail(client_id: int, days: int = 7, db: Session = Depends(get_db)):
-    """Get a client's recent daily logs with meals and photos."""
+async def get_client_detail(client_id: int, days: int = 7, date_str: str = None, db: Session = Depends(get_db)):
+    """Get a client's recent daily logs with meals.
+    If date_str is provided, returns only that day. Otherwise returns last N days.
+    """
     from datetime import timedelta, time as dtime
     today = datetime.now(SGT).date()
-    start = today - timedelta(days=days)
+
+    if date_str:
+        try:
+            target = date.fromisoformat(date_str)
+            start = target
+            today = target
+        except:
+            start = today - timedelta(days=days)
+    else:
+        start = today - timedelta(days=days)
 
     # Daily summaries
     logs = db.query(DailyLog).filter(
