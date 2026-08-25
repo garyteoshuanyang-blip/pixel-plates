@@ -157,3 +157,35 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 /* Trainer code toggle */
 .trainer-code-toggle { text-align: center; font-size: 11px; color: var(--text-dim); cursor: pointer; margin: 2px 0 6px; text-transform: uppercase; letter-spacing: 1px; padding: 4px; }
 .trainer-code-toggle:hover { color: var(--accent2); }
+
+/* Client list */
+.client-row { display: flex; align-items: center; gap: 8px; padding: 12px 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.client-row:hover { background: var(--card-hover); }
+.client-row:last-child { border-bottom: none; }
+.client-name { flex: 1; font-weight: 600; font-size: 14px; }
+.client-pts { font-size: 12px; color: var(--gold); }
+.client-arrow { color: var(--text-dim); font-size: 14px; }
+
+/* Client detail */
+.cd-day { margin-bottom: 12px; padding: 10px; background: var(--bg); border: 1px solid var(--border); }
+.cd-day-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; }
+.cd-day-pts { font-size: 12px; color: var(--gold); }
+.cd-day-macros { margin: 6px 0; }
+.cd-macro-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 11px; }
+.cd-macro-label { min-width: 24px; font-weight: 600; }
+.cd-bar-bg { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.cd-bar-fill { height: 100%; background: var(--accent2); border-radius: 4px; }
+.cd-bar-fill.protein { background: var(--accent); }
+.cd-bar-fill.carbs { background: var(--gold); }
+.cd-bar-fill.fat { background: var(--accent2); }
+.cd-macro-val { min-width: 70px; text-align: right; color: var(--text-dim); }
+
+.cd-meal { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.cd-meal:last-child { border-bottom: none; }
+.cd-meal-info { flex: 1; }
+.cd-meal-name { font-weight: 600; display: block; }
+.cd-meal-cal { color: var(--gold); }
+.cd-meal-macros { font-size: 10px; color: var(--text-dim); display: block; }
+.cd-photo { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; }
+
+.btn-back { background: none; border: 2px solid var(--border); color: var(--text); font-family: inherit; font-size: 13px; padding: 4px 10px; cursor: pointer; }

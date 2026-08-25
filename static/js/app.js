@@ -4,6 +4,8 @@ let currentUser = null;
 let currentToken = null;
 let chartRange = 'week';
 let lbPeriod = 'daily';
+let cdDays = 7;
+let selectedClientId = null;
 
 // Init
 (function init() {
@@ -27,6 +29,13 @@ let lbPeriod = 'daily';
       }
     } catch(e) { localStorage.removeItem('pixelplates_user'); }
   }
+  // Goal change listener — show/hide custom adjustment
+  const goalSelect = document.getElementById('o-goal');
+  if (goalSelect) {
+    goalSelect.addEventListener('change', function() {
+      document.getElementById('custom-adj-field').classList.toggle('hidden', this.value !== 'custom');
+    });
+  }
 })();
 
 function showScreen(id) {
@@ -43,6 +52,8 @@ function goPage(name) {
   if (name === 'leaderboard') { loadLeaderboard(); }
   if (name === 'profile') { loadProfile(); }
   if (name === 'analytics') { loadChart(); }
+  if (name === 'myclients') { loadMyClients(); }
+  if (name === 'clientdetail') { loadClientDetail(); }
 }
 
 function showAuthTab(tab) {
@@ -109,7 +120,6 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     if (!resp.ok) {
       if (resp.status === 403) {
         document.getElementById('login-error').textContent = data.detail || 'Account pending approval';
-        // If they have a saved user with this email, show pending
         showScreen('pending');
         return;
       }
@@ -140,16 +150,6 @@ async function checkPendingApproval() {
   const status = document.getElementById('pending-status');
   status.textContent = 'Checking...';
   try {
-    const resp = await fetch(API + '/api/auth/login', {
-      method: 'POST',
-      body: new FormData(document.getElementById('login-form'))
-    });
-    // Actually let's just try to login with stored credentials
-    // Re-login to check approval status
-    const f = new FormData();
-    f.append('email', currentUser.email || document.getElementById('login-email').value);
-    f.append('password', currentUser._pendingPassword || '');
-    // Simpler: fetch user info
     if (currentUser.user_id) {
       const ur = await fetch(API + '/api/user/' + currentUser.user_id);
       const ud = await ur.json();
@@ -182,6 +182,9 @@ document.getElementById('onboard-form').addEventListener('submit', async (e) => 
   f.append('gender', document.getElementById('o-gender').value);
   f.append('activity_level', document.getElementById('o-activity').value);
   f.append('goal_type', document.getElementById('o-goal').value);
+  if (document.getElementById('o-goal').value === 'custom') {
+    f.append('custom_adj', document.getElementById('o-custom-adj').value || 0);
+  }
   try {
     const resp = await fetch(API + '/api/onboard', { method: 'POST', body: f });
     const data = await resp.json();
@@ -343,7 +346,6 @@ async function loadLeaderboard() {
     const list = document.getElementById('lb-list');
     const myRank = document.getElementById('lb-my-rank');
 
-    // My rank
     try {
       const mr = await fetch(API + `/api/leaderboard/my-rank/${currentUser.user_id}?period=${lbPeriod}`);
       const md = await mr.json();
@@ -356,7 +358,6 @@ async function loadLeaderboard() {
       myRank.innerHTML = '<p class="muted">Log meals to earn points!</p>';
     }
 
-    // Leaderboard list
     const lb = data.leaderboard;
     if (!lb.length) {
       list.innerHTML = '<p class="muted">No entries yet this ${lbPeriod}</p>';
@@ -377,6 +378,96 @@ async function loadLeaderboard() {
       </div>`;
     }).join('');
   } catch(e) {}
+}
+
+// === MY CLIENTS (trainer only) ===
+function viewClientDetail(clientId, clientName) {
+  selectedClientId = clientId;
+  document.getElementById('cd-client-name').textContent = '👤 ' + clientName;
+  goPage('clientdetail');
+}
+
+function switchClientDays(days) {
+  cdDays = parseInt(days);
+  document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
+  const idx = days === '7' ? 0 : days === '14' ? 1 : 2;
+  document.querySelectorAll('#page-clientdetail .tab')[idx].classList.add('active');
+  loadClientDetail();
+}
+
+async function loadMyClients() {
+  if (!currentUser) return;
+  const list = document.getElementById('mc-client-list');
+  try {
+    const resp = await fetch(API + '/api/trainer/clients/' + currentUser.user_id);
+    const clients = await resp.json();
+    if (!clients.length) {
+      list.innerHTML = '<p class="muted">No clients yet. Approve pending sign-ups in Profile.</p>';
+      return;
+    }
+    list.innerHTML = clients.map(c => `
+      <div class="client-row" onclick="viewClientDetail(${c.id}, '${c.name.replace(/'/g, "\\'")}')">
+        <span class="client-name">${c.name}</span>
+        <span class="client-pts">🏆 ${c.total_points} pts</span>
+        <span class="client-arrow">▶</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<p class="muted">Could not load clients</p>';
+  }
+}
+
+async function loadClientDetail() {
+  if (!currentUser || !selectedClientId) return;
+  const container = document.getElementById('cd-list');
+  try {
+    const resp = await fetch(API + `/api/trainer/client-detail/${selectedClientId}?days=${cdDays}`);
+    const data = await resp.json();
+    const client = data.client;
+    const days = data.days;
+
+    if (!days.length) {
+      container.innerHTML = '<p class="muted">No meals logged in this period.</p>';
+      return;
+    }
+
+    container.innerHTML = days.map(d => {
+      const calPct = Math.min(100, (d.calories / d.goal_calories) * 100);
+      const proPct = Math.min(100, (d.protein / d.goal_protein) * 100);
+      const carbPct = Math.min(100, (d.carbs / d.goal_carbs) * 100);
+      const fatPct = Math.min(100, (d.fat / d.goal_fat) * 100);
+      const status = d.goal_met ? '✅' : '❌';
+      const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+
+      const mealsHtml = d.meals.map(m => {
+        const photoHtml = m.photo_path ? `<img src="${m.photo_path}" class="cd-photo" onclick="window.open('${m.photo_path}')" loading="lazy">` : '';
+        return `<div class="cd-meal">
+          <div class="cd-meal-info">
+            <span class="cd-meal-name">${m.food_name}</span>
+            <span class="cd-meal-cal">${m.calories} cal</span>
+            <span class="cd-meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span>
+          </div>
+          ${photoHtml}
+        </div>`;
+      }).join('');
+
+      return `<div class="cd-day">
+        <div class="cd-day-header">
+          <span><strong>${dateLabel}</strong> ${status}</span>
+          <span class="cd-day-pts">🏆 ${d.total_points} pts</span>
+        </div>
+        <div class="cd-day-macros">
+          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${d.calories}/${d.goal_calories}</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${d.protein}/${d.goal_protein}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${d.carbs}/${d.goal_carbs}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${d.fat}/${d.goal_fat}g</span></div>
+        </div>
+        ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<p class="muted">Error loading client data</p>';
+  }
 }
 
 // === ADMIN PANEL ===
@@ -442,7 +533,6 @@ async function loadProfile() {
        <p>Goal: <strong>${d.goal_label || d.goal_type}</strong></p>
        <p>TDEE: <strong>${d.tdee} cal</strong> → Daily: <strong>${d.daily_calorie_goal} cal</strong></p>`;
 
-    // Load macro sliders
     const p = d.protein_pct || 30;
     const c = d.carbs_pct || 40;
     const f2 = d.fat_pct || 30;
@@ -458,7 +548,11 @@ async function loadProfile() {
        <div id="macro-slider-preview" style="margin-top:6px;font-size:12px;color:var(--text-dim);text-align:center">
         ${p}% P · ${c}% C · ${f2}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f2/100/9)}g</div>`;
 
-    // Load admin panel if trainer
+    // Show/hide My Clients nav button + admin panel based on role
+    const clientsBtn = document.getElementById('nav-myclients');
+    if (clientsBtn) {
+      clientsBtn.style.display = d.role === 'trainer' ? 'block' : 'none';
+    }
     if (d.role === 'trainer') {
       loadAdminPanel();
     }
@@ -480,7 +574,7 @@ function updateSliders() {
   document.getElementById('slider-p-val').textContent = p + '%';
   document.getElementById('slider-c-val').textContent = c + '%';
   document.getElementById('slider-f-val').textContent = f + '%';
-  const cal = 2211; // approximate, gets recalculated on save
+  const cal = 2211;
   document.getElementById('macro-slider-preview').textContent =
     `${p}% P · ${c}% C · ${f}% F → P:${Math.round(cal*p/100/4)}g · C:${Math.round(cal*c/100/4)}g · F:${Math.round(cal*f/100/9)}g`;
 }
@@ -547,7 +641,6 @@ function drawChart(data) {
   const maxCal = Math.max(...data.map(d => Math.max(d.calories, d.goal || 2000))) * 1.15;
   const barW = Math.min(16, cx / data.length - 3);
 
-  // Grid lines
   ctx.strokeStyle = '#2a3a5e'; ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + cy * (1 - i/4);
@@ -556,7 +649,6 @@ function drawChart(data) {
     ctx.fillText(Math.round(maxCal * i / 4), pad.left - 5, y + 3);
   }
 
-  // Goal line
   if (data[0].goal) {
     const goalY = pad.top + cy * (1 - data[0].goal / maxCal);
     ctx.strokeStyle = '#0f9b8e'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]);
@@ -566,14 +658,12 @@ function drawChart(data) {
     ctx.fillText('Goal', w - pad.right - 30, goalY - 3);
   }
 
-  // Bars
   data.forEach((d, i) => {
     const x = pad.left + i * (barW + 3) + cx / data.length / 2 - barW / 2;
     const barH = (d.calories / maxCal) * cy;
     const y = pad.top + cy - barH;
     ctx.fillStyle = d.goal_met ? '#4ade80' : '#e94560';
     ctx.fillRect(x, y, barW, barH);
-    // Label
     ctx.fillStyle = '#8899aa'; ctx.font = '8px Inter'; ctx.textAlign = 'center';
     if (data.length <= 8) ctx.fillText(d.label, x + barW/2, h - 5);
   });

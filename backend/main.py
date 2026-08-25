@@ -159,6 +159,92 @@ async def deny_user(user_id: int, db: Session = Depends(get_db)):
     return {"ok": True, "deleted": user_id}
 
 
+# === Trainer: Client Roster ===
+
+
+@app.get("/api/trainer/clients/{trainer_id}")
+async def get_my_clients(trainer_id: int, db: Session = Depends(get_db)):
+    """List all approved clients for a trainer."""
+    user = db.query(User).filter(User.id == trainer_id).first()
+    if not user or user.role != 'trainer':
+        raise HTTPException(403, "Not authorized")
+    clients = db.query(User).filter(
+        User.role == 'client',
+        User.approved == True,
+    ).all()
+    return [{
+        "id": c.id,
+        "name": c.name,
+        "email": c.email,
+        "total_points": c.total_points or 0,
+    } for c in clients]
+
+
+@app.get("/api/trainer/client-detail/{client_id}")
+async def get_client_detail(client_id: int, days: int = 7, db: Session = Depends(get_db)):
+    """Get a client's recent daily logs with meals and photos."""
+    from datetime import timedelta, time as dtime
+    today = datetime.now(SGT).date()
+    start = today - timedelta(days=days)
+
+    # Daily summaries
+    logs = db.query(DailyLog).filter(
+        DailyLog.user_id == client_id,
+        DailyLog.date >= start,
+        DailyLog.date <= today,
+    ).order_by(DailyLog.date.desc()).all()
+
+    daily_data = []
+    for log in logs:
+        # Meals for that day (SG→UTC range)
+        sg_start = datetime.combine(log.date, dtime.min, tzinfo=SGT)
+        sg_end = sg_start + timedelta(days=1)
+        utc_start = sg_start.astimezone(timezone.utc).replace(tzinfo=None)
+        utc_end = sg_end.astimezone(timezone.utc).replace(tzinfo=None)
+        meals = db.query(Meal).filter(
+            Meal.user_id == client_id,
+            Meal.created_at >= utc_start,
+            Meal.created_at < utc_end,
+        ).order_by(Meal.created_at.asc()).all()
+
+        daily_data.append({
+            "date": str(log.date),
+            "calories": log.total_calories or 0,
+            "protein": log.total_protein or 0,
+            "carbs": log.total_carbs or 0,
+            "fat": log.total_fat or 0,
+            "goal_calories": log.goal_calories or 0,
+            "goal_protein": log.goal_protein or 0,
+            "goal_carbs": log.goal_carbs or 0,
+            "goal_fat": log.goal_fat or 0,
+            "goal_met": log.goal_met or False,
+            "meal_count": log.meal_count or 0,
+            "total_points": log.total_points or 0,
+            "meals": [{
+                "id": m.id,
+                "food_name": m.food_name,
+                "calories": m.user_calories or m.ai_calories or 0,
+                "protein": m.user_protein or m.ai_protein or 0,
+                "carbs": m.user_carbs or m.ai_carbs or 0,
+                "fat": m.user_fat or m.ai_fat or 0,
+                "photo_path": m.photo_path,
+                "notes": m.notes,
+                "time": m.created_at.replace(tzinfo=timezone.utc).astimezone(SGT).isoformat() if m.created_at else None,
+            } for m in meals],
+        })
+
+    client = db.query(User).filter(User.id == client_id).first()
+    return {
+        "client": {
+            "id": client.id,
+            "name": client.name,
+            "email": client.email,
+            "total_points": client.total_points or 0,
+        } if client else None,
+        "days": daily_data,
+    }
+
+
 # === Leaderboard ===
 
 
@@ -319,6 +405,7 @@ async def onboard(
     gender: str = Form(...),
     activity_level: str = Form(...),
     goal_type: str = Form(...),
+    custom_adj: int = Form(0),
     db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.id == user_id).first()
@@ -326,7 +413,7 @@ async def onboard(
         raise HTTPException(404, "User not found")
 
     tdee = tdee_service.calculate_tdee(weight_kg, height_cm, age, gender, activity_level)
-    daily_goal = tdee_service.calculate_goal(tdee, goal_type)
+    daily_goal = tdee_service.calculate_goal(tdee, goal_type, custom_adj)
     macros = tdee_service.get_default_macros(goal_type, daily_goal)
 
     user.age = age
@@ -375,6 +462,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
         "goal_type": user.goal_type,
         "tdee": user.tdee,
         "daily_calorie_goal": user.daily_calorie_goal,
+        "custom_adj": 0,
         "credits": user.credits,
         "weekly_streak": user.weekly_streak,
         "longest_streak": user.longest_streak,
@@ -513,12 +601,7 @@ async def create_meal(
     db.commit()
     db.refresh(meal)
 
-    # Delete photo after AI processing (save space, no retention needed)
-    if photo_path and os.path.exists(filepath):
-        try:
-            os.remove(filepath)
-        except:
-            pass
+
 
     return {
         "meal_id": meal.id,

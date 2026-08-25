@@ -17,16 +17,22 @@ ACTIVITY_MULTIPLIERS = {
 }
 
 GOAL_ADJUSTMENTS = {
-    "lose": -500,
+    "lose200": -200,
+    "lose500": -500,
     "maintain": 0,
-    "gain": 200,
+    "gain200": 200,
+    "gain500": 500,
+    "custom": 0,  # adjustment set separately
 }
 
 # Default macro splits per goal type
 DEFAULT_MACRO_SPLITS = {
-    "lose": {"protein": 40, "carbs": 30, "fat": 30},
-    "maintain": {"protein": 30, "carbs": 40, "fat": 30},
-    "gain": {"protein": 35, "carbs": 40, "fat": 25},
+    "lose200": {"protein": 30, "carbs": 30, "fat": 40},
+    "lose500": {"protein": 30, "carbs": 30, "fat": 40},
+    "maintain": {"protein": 25, "carbs": 40, "fat": 35},
+    "gain200": {"protein": 25, "carbs": 45, "fat": 30},
+    "gain500": {"protein": 25, "carbs": 45, "fat": 30},
+    "custom": {"protein": 25, "carbs": 40, "fat": 35},
 }
 
 # Cal per gram
@@ -39,7 +45,9 @@ def calculate_tdee(weight_kg: float, height_cm: float, age: int, gender: str, ac
     return round(bmr * multiplier)
 
 
-def calculate_goal(tdee: float, goal_type: str) -> int:
+def calculate_goal(tdee: float, goal_type: str, custom_adj: int = 0) -> int:
+    if goal_type == "custom":
+        return max(1200, int(tdee + custom_adj))
     adjustment = GOAL_ADJUSTMENTS.get(goal_type, 0)
     return max(1200, int(tdee + adjustment))
 
@@ -75,7 +83,10 @@ ACTIVITY_LABELS = {
 }
 
 GOAL_LABELS = {
-    "lose": "Lose Weight (−500 cal/day)",
+    "lose200": "Lose Weight (−200 cal/day)",
+    "lose500": "Lose Weight (−500 cal/day)",
     "maintain": "Maintain Weight",
-    "gain": "Gain Muscle (+200 cal/day)",
+    "gain200": "Gain Weight (+200 cal/day)",
+    "gain500": "Gain Weight (+500 cal/day)",
+    "custom": "Custom Adjustment",
 }

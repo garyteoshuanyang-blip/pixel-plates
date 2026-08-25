@@ -77,10 +77,17 @@
         </select>
         <label>Goal</label>
         <select id="o-goal">
-          <option value="lose">Lose Weight (−500 cal/day)</option>
+          <option value="lose200">Lose Weight (−200 cal/day)</option>
+          <option value="lose500" selected>Lose Weight (−500 cal/day)</option>
           <option value="maintain">Maintain Weight</option>
-          <option value="gain">Gain Muscle (+200 cal/day)</option>
+          <option value="gain200">Gain Weight (+200 cal/day)</option>
+          <option value="gain500">Gain Weight (+500 cal/day)</option>
+          <option value="custom">Custom Adjustment</option>
         </select>
+        <div id="custom-adj-field" class="hidden">
+          <label>Custom Calorie Adjustment</label>
+          <input type="number" id="o-custom-adj" value="0" min="-1000" max="1000" step="50">
+        </div>
         <button type="submit" class="btn">▶ Calculate My Targets</button>
       </form>
       <div id="onboard-result" class="hidden result-card">
@@ -257,10 +264,43 @@
       </div>
     </div>
 
+    <!-- PAGE: MY CLIENTS (trainer only) -->
+    <div id="page-myclients" class="page">
+      <pre class="pixel-logo" style="font-size:5px;margin:4px 0">
+██████╗ ██╗██╗  ██╗███████╗██╗     ██████╗ ██╗      █████╗ ████████╗███████╗███████╗
+██╔══██╗██║╚██╗██╔╝██╔════╝██║     ██╔══██╗██║     ██╔══██╗╚══██╔══╝██╔════╝██╔════╝
+██████╔╝██║ ╚███╔╝ █████╗  ██║     ██████╔╝██║     ███████║   ██║   █████╗  ███████╗
+██╔═══╝ ██║ ██╔██╗ ██╔══╝  ██║     ██╔═══╝ ██║     ██╔══██║   ██║   ██╔══╝  ╚════██║
+██║     ██║██╔╝ ██╗███████╗███████╗██║     ███████╗██║  ██║   ██║   ███████╗███████║
+╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝╚═╝     ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚══════╝
+      </pre>
+      <div class="page-header"><span>👥 My Clients</span></div>
+      <div class="card">
+        <div id="mc-client-list"><p class="muted">Loading clients...</p></div>
+      </div>
+    </div>
+
+    <!-- PAGE: CLIENT DETAIL (trainer viewing one client) -->
+    <div id="page-clientdetail" class="page">
+      <div class="page-header" style="padding:4px 0">
+        <button class="btn-back" onclick="goPage('myclients')">← Back</button>
+        <span id="cd-client-name" style="font-size:14px"></span>
+      </div>
+      <div class="card">
+        <div class="tab-bar" style="margin-bottom:4px">
+          <button class="tab active" onclick="switchClientDays('7')">7 Days</button>
+          <button class="tab" onclick="switchClientDays('14')">14 Days</button>
+          <button class="tab" onclick="switchClientDays('30')">30 Days</button>
+        </div>
+        <div id="cd-list"></div>
+      </div>
+    </div>
+
     <!-- Bottom Nav -->
     <div class="bottom-nav">
       <button class="nav-btn active" data-page="overview" onclick="goPage('overview')">📊 Overview</button>
       <button class="nav-btn" data-page="leaderboard" onclick="goPage('leaderboard')">🏆 Leaderboard</button>
+      <button class="nav-btn" id="nav-myclients" data-page="myclients" onclick="goPage('myclients')" style="display:none">👥 Clients</button>
       <button class="nav-btn" data-page="analytics" onclick="goPage('analytics')">📈 Trends</button>
       <button class="nav-btn" data-page="profile" onclick="goPage('profile')">👤 Profile</button>
     </div>
