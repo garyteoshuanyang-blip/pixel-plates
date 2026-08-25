@@ -17,6 +17,8 @@ let selectedClientId = null;
       if (currentUser.role === 'trainer') {
         showScreen('app');
         goPage('overview');
+        const clientsBtn = document.getElementById('nav-myclients');
+        if (clientsBtn) clientsBtn.style.display = 'block';
       } else if (currentUser.approved) {
         if (currentUser.onboarded) {
           showScreen('app');
@@ -99,6 +101,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
       if (ld.role === 'trainer') {
         document.getElementById('reg-error').textContent = '✅ Trainer account created!';
         showScreen('onboard');
+        const clientsBtn = document.getElementById('nav-myclients');
+        if (clientsBtn) clientsBtn.style.display = 'block';
       } else if (ld.approved) {
         showScreen('onboard');
       } else {
@@ -137,6 +141,10 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         currentUser.onboarded = true;
         localStorage.setItem('pixelplates_user', JSON.stringify(currentUser));
         showScreen('app'); goPage('overview');
+        if (data.role === 'trainer') {
+          const clientsBtn = document.getElementById('nav-myclients');
+          if (clientsBtn) clientsBtn.style.display = 'block';
+        }
       } else { showScreen('onboard'); }
     } else {
       showScreen('pending');
