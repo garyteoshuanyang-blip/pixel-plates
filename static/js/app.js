@@ -380,7 +380,6 @@ async function loadLeaderboard() {
     const lb = data.leaderboard;
     if (!lb.length) {
       list.innerHTML = '<p class="muted">No entries yet this ' + lbPeriod + '</p>';
-      document.getElementById('lb-challenge').style.display = 'none';
       return;
     }
 
@@ -424,6 +423,201 @@ async function loadAchievements() {
       }).join('')}</div>`;
   } catch(e) {
     container.innerHTML = '<p class="muted">Could not load achievements</p>';
+  }
+}
+
+// === PROFILE ===
+async function loadProfile() {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch(API + '/api/user/' + currentUser.user_id);
+    const u = await resp.json();
+    if (!resp.ok) return;
+
+    document.getElementById('prof-email').textContent = u.email || '';
+    document.getElementById('prof-name').textContent = u.name || '';
+    document.getElementById('prof-role').textContent = (u.role || '').charAt(0).toUpperCase() + (u.role || '').slice(1);
+    document.getElementById('prof-points').textContent = u.total_points || 0;
+
+    const stats = document.getElementById('prof-stats');
+    stats.innerHTML = u.onboarded ? `
+      <p>Age: <strong>${u.age}</strong></p>
+      <p>Height: <strong>${u.height_cm} cm</strong></p>
+      <p>Weight: <strong>${u.weight_kg} kg</strong></p>
+      <p>Gender: <strong>${u.gender}</strong></p>
+      <p>Activity: <strong>${u.activity_label || u.activity_level}</strong></p>
+      <p>TDEE: <strong>${u.tdee} cal</strong></p>
+      <p>Goal: <strong>${u.daily_calorie_goal} cal</strong> <span class="goal-label">${u.goal_label}</span></p>
+      <p>🔥 Streak: <strong>${u.weekly_streak}d</strong> (best: ${u.longest_streak}d)</p>
+    ` : '<p class="muted">Complete onboarding to see stats</p>';
+
+    // Macro sliders
+    const macroDiv = document.getElementById('prof-macro-sliders');
+    if (macroDiv) {
+      const p = u.protein_pct || 30;
+      const c = u.carbs_pct || 40;
+      const f = u.fat_pct || 30;
+      macroDiv.innerHTML = `
+        <div class="macro-slider-row">
+          <label><span style="color:var(--accent)">🥩 Protein</span> <span id="mp-val">${p}%</span></label>
+          <input type="range" id="mp-slider" min="10" max="60" value="${p}" oninput="document.getElementById('mp-val').textContent=this.value+'%'">
+        </div>
+        <div class="macro-slider-row">
+          <label><span style="color:var(--gold)">🍚 Carbs</span> <span id="mc-val">${c}%</span></label>
+          <input type="range" id="mc-slider" min="10" max="70" value="${c}" oninput="document.getElementById('mc-val').textContent=this.value+'%'">
+        </div>
+        <div class="macro-slider-row">
+          <label><span style="color:var(--accent2)">🧈 Fat</span> <span id="mf-val">${f}%</span></label>
+          <input type="range" id="mf-slider" min="10" max="60" value="${f}" oninput="document.getElementById('mf-val').textContent=this.value+'%'">
+        </div>
+        <p id="macro-total" style="font-size:11px;color:var(--text-dim);text-align:center"></p>`;
+    }
+
+    // Admin panel (trainer only)
+    const panel = document.getElementById('admin-panel');
+    if (panel) {
+      if (u.role === 'trainer') {
+        panel.classList.remove('hidden');
+        loadPendingUsers();
+      } else {
+        panel.classList.add('hidden');
+      }
+    }
+  } catch(e) {}
+}
+
+async function saveMacros() {
+  if (!currentUser) return;
+  const p = parseInt(document.getElementById('mp-slider').value) || 30;
+  const c = parseInt(document.getElementById('mc-slider').value) || 40;
+  const f = parseInt(document.getElementById('mf-slider').value) || 30;
+  const total = p + c + f;
+  const status = document.getElementById('macro-save-status');
+  if (Math.abs(total - 100) > 1) {
+    status.textContent = '⚠️ Percentages must add up to 100%';
+    return;
+  }
+  try {
+    const fd = new FormData();
+    fd.append('user_id', currentUser.user_id);
+    fd.append('protein_pct', p);
+    fd.append('carbs_pct', c);
+    fd.append('fat_pct', f);
+    const resp = await fetch(API + '/api/macros', { method: 'POST', body: fd });
+    if (resp.ok) {
+      status.textContent = '✅ Macros saved!';
+      status.style.color = 'var(--success)';
+    } else {
+      const d = await resp.json();
+      status.textContent = d.detail || 'Error saving';
+      status.style.color = 'var(--danger)';
+    }
+  } catch(e) {
+    status.textContent = 'Connection error';
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+async function loadPendingUsers() {
+  const list = document.getElementById('admin-pending-list');
+  if (!list) return;
+  try {
+    const resp = await fetch(API + '/api/admin/pending-users');
+    const users = await resp.json();
+    if (!users.length) {
+      list.innerHTML = '<p class="muted">No pending requests</p>';
+      return;
+    }
+    list.innerHTML = users.map(u => `
+      <div class="admin-user-row">
+        <div class="admin-user-info">
+          <strong>${u.name}</strong>
+          <span class="admin-user-date">${u.email} · ${u.created_at ? new Date(u.created_at).toLocaleDateString() : ''}</span>
+        </div>
+        <div class="admin-user-actions">
+          <button class="admin-btn admin-btn-approve" onclick="approveUser(${u.id})">✅ Approve</button>
+          <button class="admin-btn admin-btn-deny" onclick="denyUser(${u.id})">❌ Deny</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = '<p class="muted">Could not load pending users</p>';
+  }
+}
+
+async function approveUser(id) {
+  try {
+    await fetch(API + '/api/admin/approve/' + id, { method: 'POST' });
+    loadPendingUsers();
+  } catch(e) {}
+}
+
+async function denyUser(id) {
+  try {
+    await fetch(API + '/api/admin/deny/' + id, { method: 'POST' });
+    loadPendingUsers();
+  } catch(e) {}
+}
+
+// === ANALYTICS / CHART ===
+function switchChart(range) {
+  chartRange = range;
+  document.querySelectorAll('#page-analytics .tab').forEach(t => t.classList.remove('active'));
+  const idx = range === 'week' ? 0 : range === 'month' ? 1 : 2;
+  document.querySelectorAll('#page-analytics .tab')[idx].classList.add('active');
+  loadChart();
+}
+
+async function loadChart() {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch(API + `/api/history/${currentUser.user_id}?range=${chartRange}`);
+    const data = await resp.json();
+    if (!data.length) {
+      document.getElementById('chart-summary').textContent = 'No data yet in this period';
+      return;
+    }
+    const canvas = document.getElementById('chart-canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw bars
+    const barCount = data.length;
+    const barW = Math.min(20, (w - 30) / barCount);
+    const maxCals = Math.max(...data.map(d => d.goal), 1);
+    const pad = 20, bottom = h - pad, topPad = 10;
+    const chartH = h - pad - topPad;
+
+    data.forEach((d, i) => {
+      const x = pad + i * (barW + 2);
+      const calH = (d.calories / maxCals) * chartH;
+      const goalH = (d.goal / maxCals) * chartH;
+
+      // Goal line
+      ctx.fillStyle = '#ffd70088';
+      ctx.fillRect(x, bottom - goalH, barW, 2);
+
+      // Calorie bar
+      ctx.fillStyle = d.goal_met ? '#4ade80' : '#e94560';
+      ctx.fillRect(x, bottom - calH, barW, Math.max(calH, 2));
+
+      // Label
+      ctx.fillStyle = '#8899aa';
+      ctx.font = '8px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.label, x + barW / 2, h - 4);
+    });
+
+    // Summary
+    const totalCals = data.reduce((s, d) => s + d.calories, 0);
+    const avgCals = Math.round(totalCals / data.length);
+    const metDays = data.filter(d => d.goal_met).length;
+    document.getElementById('chart-summary').textContent =
+      `📊 Avg ${avgCals} cal/day · ✅ ${metDays}/${data.length} days met goal`;
+  } catch(e) {
+    document.getElementById('chart-summary').textContent = 'Could not load chart data';
   }
 }
 
