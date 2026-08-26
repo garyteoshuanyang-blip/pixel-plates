@@ -13,10 +13,21 @@ from jose import jwt, JWTError
 import json
 
 import sys
+import subprocess
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory
 from backend.services import tdee as tdee_service
 from backend.services.vision import analyze_food_photo, analyze_food_text
+
+# Generate cache-busting version that changes every deploy
+try:
+    BUILD_VERSION = subprocess.check_output(
+        ["git", "-C", os.path.dirname(os.path.abspath(__file__)), "rev-parse", "--short", "HEAD"],
+        stderr=subprocess.DEVNULL
+    ).decode().strip()
+except Exception:
+    BUILD_VERSION = os.getenv("RAILWAY_DEPLOYMENT_ID", str(int(datetime.now().timestamp())))
 
 app = FastAPI(title="Pixel Plates")
 
@@ -1145,7 +1156,7 @@ async def get_trainer_summary(trainer_id: int, db: Session = Depends(get_db)):
 async def index():
     resp = open(os.path.join(os.path.dirname(__file__), "..", "static", "index.html"), "r").read()
     # Inject cache-busting version for JS/CSS
-    version = os.getenv("RAILWAY_SERVICE_NAME", "dev")
+    version = BUILD_VERSION
     resp = resp.replace('static/js/app.js">', f'static/js/app.js?v={version}">')
     resp = resp.replace('static/css/style.css">', f'static/css/style.css?v={version}">')
     return HTMLResponse(resp, headers={"Cache-Control": "no-cache, must-revalidate"})
