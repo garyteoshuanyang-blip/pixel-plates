@@ -52,7 +52,7 @@ function goPage(name) {
   document.querySelector(`.nav-btn[data-page="${name}"]`).classList.add('active');
   if (name === 'overview') { loadOverview(); loadMeals(); checkStreak(); }
   if (name === 'leaderboard') { loadLeaderboard(); }
-  if (name === 'profile') { loadProfile(); }
+  if (name === 'profile') { loadProfile(); loadAchievements(); }
   if (name === 'analytics') { loadChart(); }
   if (name === 'myclients') { loadMyClients(); }
   if (name === 'clientdetail') { loadClientDetail(); }
@@ -338,6 +338,15 @@ async function checkStreak() {
   } catch(e) {}
 }
 
+function streakEmoji(days) {
+  if (days >= 30) return '🔥🔥🔥';
+  if (days >= 14) return '🔥🔥';
+  if (days >= 7) return '🔥';
+  if (days >= 3) return '⚡';
+  if (days >= 1) return '📅';
+  return '';
+}
+
 // === LEADERBOARD ===
 function switchLeaderboard(period) {
   lbPeriod = period;
@@ -358,10 +367,11 @@ async function loadLeaderboard() {
     try {
       const mr = await fetch(API + `/api/leaderboard/my-rank/${currentUser.user_id}?period=${lbPeriod}`);
       const md = await mr.json();
+      const myStreakEmoji = streakEmoji(md.days_logged);
       myRank.innerHTML = `<div class="my-rank-inner">
         <span class="my-rank-pos">#${md.rank} of ${md.total_participants}</span>
         <span class="my-rank-pts">🏆 ${md.total_points} pts</span>
-        <span class="my-rank-detail">${md.days_logged} days · 🎯${md.cal_points} 🥩${md.pro_points} 🍚${md.carb_points} 🧈${md.fat_points}</span>
+        <span class="my-rank-detail">${md.days_logged}d · 🎯${md.cal_points} 🥩${md.pro_points} 🍚${md.carb_points} 🧈${md.fat_points}</span>
       </div>`;
     } catch(e) {
       myRank.innerHTML = '<p class="muted">Log meals to earn points!</p>';
@@ -369,24 +379,52 @@ async function loadLeaderboard() {
 
     const lb = data.leaderboard;
     if (!lb.length) {
-      list.innerHTML = '<p class="muted">No entries yet this ${lbPeriod}</p>';
+      list.innerHTML = '<p class="muted">No entries yet this ' + lbPeriod + '</p>';
+      document.getElementById('lb-challenge').style.display = 'none';
       return;
     }
 
     const maxPts = lb.length > 0 ? lb[0].total_points : 1;
     list.innerHTML = lb.map((r, i) => {
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${r.rank}`;
+      const medal = i === 0 ? '👑🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${r.rank}`;
       const barW = Math.max(8, (r.total_points / maxPts) * 100);
       const isMe = r.user_id === currentUser.user_id;
+      const se = streakEmoji(r.streak || 0);
+      const streakHtml = se ? ` <span class="lb-streak" title="${r.streak}d streak">${se}</span>` : '';
+      const kingIcon = r.days_as_king > 0 && i !== 0 ? ` <span class="lb-former-king" title="Was #1 for ${r.days_as_king}d">👑</span>` : '';
       return `<div class="lb-row ${isMe ? 'lb-row-me' : ''}">
         <span class="lb-rank">${medal}</span>
-        <span class="lb-name">${r.name}${isMe ? ' (you)' : ''}</span>
+        <span class="lb-name">${r.name}${streakHtml}${kingIcon}${isMe ? ' (you)' : ''}</span>
         <span class="lb-pts">${r.total_points} pts</span>
         <div class="lb-bar-bg"><div class="lb-bar-fill" style="width:${barW}%"></div></div>
-        <span class="lb-detail">${r.days_logged}d · 🎯${r.cal_points} 🥩${r.pro_points} 🍚${r.carb_points} 🧈${r.fat_points}</span>
+        <span class="lb-detail">${r.days_logged}d · 🎯${r.cal_points} 🥩${r.pro_points} 🍚${r.carb_points} 🧈${r.fat_points}${r.streak ? ' · 🔥' + r.streak + 'd' : ''}</span>
       </div>`;
     }).join('');
+
   } catch(e) {}
+}
+
+// === ACHIEVEMENTS ===
+async function loadAchievements() {
+  if (!currentUser) return;
+  const container = document.getElementById('prof-achievements');
+  if (!container) return;
+  try {
+    const resp = await fetch(API + `/api/achievements/${currentUser.user_id}`);
+    const data = await resp.json();
+    const achs = data.achievements;
+    container.innerHTML = `<p style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Unlocked ${data.unlocked_count}/${data.total_count}</p>
+      <div class="ach-grid">${achs.map(a => {
+        const pct = Math.min(100, (a.progress / a.total) * 100);
+        return `<div class="ach-item ${a.unlocked ? 'ach-unlocked' : 'ach-locked'}">
+          <span class="ach-emoji">${a.emoji}</span>
+          <span class="ach-name">${a.name}</span>
+          ${a.unlocked ? '<span class="ach-check">✅</span>' : `<div class="ach-progress-bg"><div class="ach-progress-fill" style="width:${pct}%"></div></div>`}
+        </div>`;
+      }).join('')}</div>`;
+  } catch(e) {
+    container.innerHTML = '<p class="muted">Could not load achievements</p>';
+  }
 }
 
 // === MY CLIENTS ===

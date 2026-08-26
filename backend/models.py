@@ -4,7 +4,13 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime, date
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./pixel_plates.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    # Railway always injects DATABASE_URL via PostgreSQL plugin — if missing, refuse to start
+    raise RuntimeError(
+        "DATABASE_URL is not set. Railway PostgreSQL plugin must be attached. "
+        "Run: railway plugin add postgresql"
+    )
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -46,6 +52,8 @@ class User(Base):
     approved = Column(Boolean, default=False)
     role = Column(String, default='client')  # 'trainer' or 'client'
 
+    days_as_king = Column(Integer, default=0)
+    last_king_date = Column(Date, nullable=True)
     trainer_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -115,3 +123,5 @@ class Inventory(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+

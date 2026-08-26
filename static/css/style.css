@@ -158,6 +158,21 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .trainer-code-toggle { text-align: center; font-size: 11px; color: var(--text-dim); cursor: pointer; margin: 2px 0 6px; text-transform: uppercase; letter-spacing: 1px; padding: 4px; }
 .trainer-code-toggle:hover { color: var(--accent2); }
 
+/* Leaderboard streak badges */
+.lb-streak { font-size: 13px; }
+.lb-former-king { font-size: 11px; opacity: 0.6; }
+
+/* Achievements grid */
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ach-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; text-align: center; position: relative; background: var(--bg); }
+.ach-unlocked { border-color: var(--gold); background: rgba(255,215,0,0.05); }
+.ach-locked { opacity: 0.55; }
+.ach-emoji { font-size: 22px; }
+.ach-name { font-weight: 600; font-size: 10px; }
+.ach-check { font-size: 14px; position: absolute; top: 2px; right: 4px; }
+.ach-progress-bg { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; width: 80%; margin-top: 2px; }
+.ach-progress-fill { height: 100%; background: var(--gold); border-radius: 2px; }
+
 /* Client list */
 .client-row { display: flex; align-items: center; gap: 8px; padding: 12px 8px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .client-row:hover { background: var(--card-hover); }

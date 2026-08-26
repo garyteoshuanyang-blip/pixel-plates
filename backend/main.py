@@ -38,6 +38,10 @@ def check_and_migrate():
             conn.execute(sql_text("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'client'"))
         if 'total_points' not in users_cols:
             conn.execute(sql_text("ALTER TABLE users ADD COLUMN total_points INTEGER DEFAULT 0"))
+        if 'days_as_king' not in users_cols:
+            conn.execute(sql_text("ALTER TABLE users ADD COLUMN days_as_king INTEGER DEFAULT 0"))
+        if 'last_king_date' not in users_cols:
+            conn.execute(sql_text("ALTER TABLE users ADD COLUMN last_king_date DATE"))
         # DailyLog table
         daily_cols = [c['name'] for c in inspector.get_columns('daily_logs')]
         for col in ['points_calories', 'points_protein', 'points_carbs', 'points_fat', 'total_points']:
@@ -297,10 +301,17 @@ async def get_leaderboard(period: str = "daily", db: Session = Depends(get_db)):
     ).group_by(DailyLog.user_id).order_by(func.sum(DailyLog.total_points).desc().nullslast()).all()
 
     result = []
-    for row in rows:
+    for i, row in enumerate(rows):
         user = db.query(User).filter(User.id == row.user_id).first()
         if not user:
             continue
+        # Track days_as_king (once per calendar day)
+        if i == 0 and period == 'daily':
+            today = datetime.now(SGT).date()
+            if user.last_king_date != today:
+                user.days_as_king = (user.days_as_king or 0) + 1
+                user.last_king_date = today
+                db.commit()
         result.append({
             "user_id": user.id,
             "name": user.name,
@@ -310,11 +321,10 @@ async def get_leaderboard(period: str = "daily", db: Session = Depends(get_db)):
             "carb_points": int(row.carb_points or 0),
             "fat_points": int(row.fat_points or 0),
             "days_logged": int(row.days_logged or 0),
+            "streak": user.weekly_streak or 0,
+            "days_as_king": user.days_as_king or 0,
+            "rank": i + 1,
         })
-
-    # Add rank
-    for i, r in enumerate(result):
-        r["rank"] = i + 1
 
     return {"period": period, "leaderboard": result}
 
@@ -374,6 +384,95 @@ async def get_my_rank(user_id: int, period: str = "daily", db: Session = Depends
         "days_logged": int(my_row.days_logged or 0) if my_row else 0,
         "name": user.name if user else "",
     }
+
+
+# === Achievements ===
+
+
+ACHIEVEMENT_DEFS = [
+    {"id": "first_meal", "emoji": "🥇", "name": "First Bite", "desc": "Log your first meal"},
+    {"id": "on_fire", "emoji": "🔥", "name": "On Fire", "desc": "7-day streak"},
+    {"id": "consistent", "emoji": "🌟", "name": "Star Client", "desc": "30-day streak"},
+    {"id": "perfect_week", "emoji": "🏅", "name": "Perfect Week", "desc": "7 straight days at 25 pts"},
+    {"id": "century", "emoji": "💯", "name": "Century", "desc": "100 total challenge points"},
+    {"id": "macro_master", "emoji": "🧩", "name": "Macro Master", "desc": "Hit all 4 goals on 7 or more days"},
+    {"id": "foodie", "emoji": "📸", "name": "Foodie", "desc": "Log 50 meals"},
+    {"id": "top_foodie", "emoji": "👑", "name": "Top Foodie", "desc": "Take #1 on the leaderboard"},
+    {"id": "goal_crusher", "emoji": "🚀", "name": "Goal Crusher", "desc": "500 total challenge points"},
+    {"id": "big_spender", "emoji": "💰", "name": "Big Spender", "desc": "Buy from the shop"},
+]
+
+
+def check_achievement(ach_id, user, db):
+    """Return (unlocked, progress, total) for one achievement."""
+    user_id = user.id
+    if ach_id == "first_meal":
+        count = db.query(func.count(Meal.id)).filter(Meal.user_id == user_id).scalar() or 0
+        return count > 0, min(count, 1), 1
+    elif ach_id == "on_fire":
+        s = user.weekly_streak or 0
+        return s >= 7, s, 7
+    elif ach_id == "consistent":
+        s = user.weekly_streak or 0
+        return s >= 30, s, 30
+    elif ach_id == "perfect_week":
+        # Count days where total_points == 25 — need last 7 consecutive
+        from datetime import timedelta
+        today = datetime.now(SGT).date()
+        logs = db.query(DailyLog).filter(
+            DailyLog.user_id == user_id,
+            DailyLog.date >= today - timedelta(days=30),
+        ).order_by(DailyLog.date.desc()).all()
+        best_run = 0
+        current_run = 0
+        for log in logs:
+            if log.total_points and log.total_points >= 25:
+                current_run += 1
+                best_run = max(best_run, current_run)
+            else:
+                current_run = 0
+        return best_run >= 7, best_run, 7
+    elif ach_id == "century":
+        pts = user.total_points or 0
+        return pts >= 100, pts, 100
+    elif ach_id == "macro_master":
+        count = db.query(func.count(DailyLog.id)).filter(
+            DailyLog.user_id == user_id,
+            DailyLog.points_protein >= 5,
+            DailyLog.points_carbs >= 5,
+            DailyLog.points_fat >= 5,
+        ).scalar() or 0
+        return count >= 7, count, 7
+    elif ach_id == "foodie":
+        count = db.query(func.count(Meal.id)).filter(Meal.user_id == user_id).scalar() or 0
+        return count >= 50, count, 50
+    elif ach_id == "top_foodie":
+        d = user.days_as_king or 0
+        return d > 0, d, 1
+    elif ach_id == "goal_crusher":
+        pts = user.total_points or 0
+        return pts >= 500, pts, 500
+    elif ach_id == "big_spender":
+        owned = db.query(func.count(Inventory.id)).filter(Inventory.user_id == user_id).scalar() or 0
+        return owned > 0, min(owned, 1), 1
+    return False, 0, 1
+
+
+@app.get("/api/achievements/{user_id}")
+async def get_achievements(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404)
+    results = []
+    for ach in ACHIEVEMENT_DEFS:
+        unlocked, progress, total = check_achievement(ach["id"], user, db)
+        results.append({
+            **ach,
+            "unlocked": unlocked,
+            "progress": progress,
+            "total": total,
+        })
+    return {"achievements": results, "unlocked_count": sum(1 for r in results if r["unlocked"]), "total_count": len(results)}
 
 
 # === Points Calculator ===
@@ -490,6 +589,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
         "role": user.role,
         "approved": user.approved,
         "total_points": user.total_points or 0,
+        "days_as_king": user.days_as_king or 0,
         "macro_goals": tdee_service.calculate_macros(
             user.daily_calorie_goal or 2000,
             user.protein_pct or 30,
