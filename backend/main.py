@@ -80,6 +80,17 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "..", "static")), name="static")
 
 
+# === Cache-busting for HTML/JS/CSS ===
+
+
+@app.middleware("http")
+async def no_cache_middleware(request, call_next):
+    response = await call_next(request)
+    if request.url.path.endswith(('.js', '.html', '.css')):
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    return response
+
+
 # === DB Helpers ===
 def get_db():
     db = SessionLocal()
@@ -1132,8 +1143,12 @@ async def get_trainer_summary(trainer_id: int, db: Session = Depends(get_db)):
 # === Serve Frontend ===
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    with open(os.path.join(os.path.dirname(__file__), "..", "static", "index.html"), "r") as f:
-        return f.read()
+    resp = open(os.path.join(os.path.dirname(__file__), "..", "static", "index.html"), "r").read()
+    # Inject cache-busting version for JS/CSS
+    version = os.getenv("RAILWAY_SERVICE_NAME", "dev")
+    resp = resp.replace('static/js/app.js">', f'static/js/app.js?v={version}">')
+    resp = resp.replace('static/css/style.css">', f'static/css/style.css?v={version}">')
+    return HTMLResponse(resp, headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/app", response_class=HTMLResponse)
