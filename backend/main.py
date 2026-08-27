@@ -651,6 +651,18 @@ async def play_with_pet(user_id: int = Form(...), db: Session = Depends(get_db))
 # === Points Calculator ===
 
 
+def is_cal_goal_met(goal_type, total_calories, goal_calories):
+    """Check if calorie goal is met based on goal type.
+    - Gain weight (gain*): points when calories >= goal (hit your target)
+    - Lose/Maintain: points when calories <= goal (kept within limit)
+    """
+    if not goal_calories:
+        return False
+    if goal_type and goal_type.startswith("gain"):
+        return (total_calories or 0) >= goal_calories
+    return (total_calories or 0) <= goal_calories
+
+
 def calculate_daily_points(daily_log):
     """Calculate challenge points for a daily log.
     - Hit daily calorie goal: 10 points
@@ -669,13 +681,15 @@ def calculate_daily_points(daily_log):
 
 def update_daily_points(daily, db):
     """Recalculate and persist points on a daily log."""
+    user = db.query(User).filter(User.id == daily.user_id).first()
+    if user:
+        daily.goal_met = is_cal_goal_met(user.goal_type, daily.total_calories, daily.goal_calories)
     total, cal_p, pro_p, carb_p, fat_p = calculate_daily_points(daily)
     daily.points_calories = cal_p
     daily.points_protein = pro_p
     daily.points_carbs = carb_p
     daily.points_fat = fat_p
     daily.total_points = total
-    user = db.query(User).filter(User.id == daily.user_id).first()
     if user:
         all_points = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == user.id).scalar() or 0
         user.total_points = all_points
@@ -907,7 +921,7 @@ async def create_meal(
     daily.total_carbs = (daily.total_carbs or 0) + result.get("carbs_g", 0)
     daily.total_fat = (daily.total_fat or 0) + result.get("fat_g", 0)
     daily.meal_count = (daily.meal_count or 0) + 1
-    daily.goal_met = daily.total_calories <= daily.goal_calories
+    daily.goal_met = is_cal_goal_met(user.goal_type, daily.total_calories, daily.goal_calories)
 
     # Recalculate challenge points
     update_daily_points(daily, db)
@@ -997,7 +1011,6 @@ async def delete_meal(meal_id: int, db: Session = Depends(get_db)):
         daily.total_carbs = sum(m.user_carbs or m.ai_carbs or 0 for m in meals)
         daily.total_fat = sum(m.user_fat or m.ai_fat or 0 for m in meals)
         daily.meal_count = len(meals)
-        daily.goal_met = daily.total_calories <= daily.goal_calories if daily.goal_calories else False
         update_daily_points(daily, db)
         db.commit()
     return {"ok": True}
@@ -1047,7 +1060,6 @@ async def edit_meal(
         daily.total_carbs = sum(m.user_carbs or m.ai_carbs or 0 for m in meals)
         daily.total_fat = sum(m.user_fat or m.ai_fat or 0 for m in meals)
         daily.meal_count = len(meals)
-        daily.goal_met = daily.total_calories <= daily.goal_calories if daily.goal_calories else False
         update_daily_points(daily, db)
         db.commit()
 
@@ -1107,7 +1119,7 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
             daily.goal_protein = macros["protein_g"]
             daily.goal_carbs = macros["carbs_g"]
             daily.goal_fat = macros["fat_g"]
-            daily.goal_met = (daily.total_calories or 0) <= current_cal
+            daily.goal_met = is_cal_goal_met(user.goal_type, daily.total_calories, current_cal)
             update_daily_points(daily, db)
             db.commit()
 
