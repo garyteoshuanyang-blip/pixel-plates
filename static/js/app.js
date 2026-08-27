@@ -625,7 +625,18 @@ async function loadChart() {
 // === MY CLIENTS ===
 function viewClientDetail(clientId, clientName) {
   selectedClientId = clientId;
+  cdDays = 7;  // Reset to default 7 days
   document.getElementById('cd-client-name').textContent = '👤 ' + clientName;
+  // Reset tabs to 7 Days active
+  document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
+  const tabs = document.querySelectorAll('#page-clientdetail .tab');
+  if (tabs[0]) tabs[0].classList.add('active');
+  // Clear date picker
+  const dp = document.getElementById('cd-date-picker');
+  if (dp) dp.value = '';
+  // Clear old data immediately
+  const container = document.getElementById('cd-list');
+  if (container) container.innerHTML = '<p class="muted" style="padding:20px;text-align:center">Loading...</p>';
   goPage('clientdetail');
 }
 

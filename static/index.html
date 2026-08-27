@@ -327,8 +327,9 @@
           <button class="tab" onclick="switchClientDays('14')">14 Days</button>
           <button class="tab" onclick="switchClientDays('30')">30 Days</button>
         </div>
-        <div class="date-nav" style="margin:4px 0">
-          <input type="date" id="cd-date-picker" onchange="goToClientDate()" style="width:100%">
+        <div class="date-nav" style="margin:2px 0;display:flex;align-items:center;gap:4px">
+          <label style="font-size:11px;color:var(--text-dim);white-space:nowrap">📅</label>
+          <input type="date" id="cd-date-picker" onchange="goToClientDate()" style="flex:1;padding:3px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);min-height:auto">
         </div>
         <div id="cd-list"></div>
       </div>
