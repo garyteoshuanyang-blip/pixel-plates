@@ -1085,6 +1085,19 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
         user.longest_streak = streak
     db.commit()
 
+    # Sync today's daily log goals from user settings if stale
+    if daily:
+        current_cal = user.daily_calorie_goal or 2000
+        if daily.goal_calories != current_cal:
+            daily.goal_calories = current_cal
+            macros = tdee_service.calculate_macros(current_cal, user.protein_pct or 30, user.carbs_pct or 40, user.fat_pct or 30)
+            daily.goal_protein = macros["protein_g"]
+            daily.goal_carbs = macros["carbs_g"]
+            daily.goal_fat = macros["fat_g"]
+            daily.goal_met = (daily.total_calories or 0) <= current_cal
+            update_daily_points(daily, db)
+            db.commit()
+
     # Calculate macro goals regardless of daily log
     default_goals = tdee_service.calculate_macros(
         user.daily_calorie_goal or 2000,
@@ -1100,10 +1113,10 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
             "total_protein": daily.total_protein if daily else 0,
             "total_carbs": daily.total_carbs if daily else 0,
             "total_fat": daily.total_fat if daily else 0,
-            "goal": daily.goal_calories if daily else (user.daily_calorie_goal or 2000),
-            "goal_protein": daily.goal_protein if daily else default_goals["protein_g"],
-            "goal_carbs": daily.goal_carbs if daily else default_goals["carbs_g"],
-            "goal_fat": daily.goal_fat if daily else default_goals["fat_g"],
+            "goal": user.daily_calorie_goal or 2000,
+            "goal_protein": default_goals["protein_g"],
+            "goal_carbs": default_goals["carbs_g"],
+            "goal_fat": default_goals["fat_g"],
             "goal_met": daily.goal_met if daily else False,
             "meal_count": daily.meal_count if daily else 0,
         },
