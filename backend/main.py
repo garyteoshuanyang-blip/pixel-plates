@@ -779,6 +779,19 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
             user.fat_pct or 30,
         ) if user.daily_calorie_goal else None,
     }
+    
+    
+
+@app.post("/api/user/rename")
+async def rename_user(user_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not name or not name.strip():
+        raise HTTPException(400, "Name cannot be empty")
+    user.name = name.strip()[:30]
+    db.commit()
+    return {"name": user.name}
 
 
 @app.post("/api/macros")

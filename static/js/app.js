@@ -487,6 +487,27 @@ async function loadProfile() {
   } catch(e) {}
 }
 
+async function editName() {
+  const current = document.getElementById('prof-name').textContent;
+  const newName = prompt('Enter your new name:', current);
+  if (!newName || newName.trim() === current) return;
+  try {
+    const fd = new FormData();
+    fd.append('user_id', currentUser.user_id);
+    fd.append('name', newName.trim());
+    const resp = await fetch(API + '/api/user/rename', { method: 'POST', body: fd });
+    if (resp.ok) {
+      document.getElementById('prof-name').textContent = newName.trim();
+      loadOverview();
+    } else {
+      const d = await resp.json();
+      alert(d.detail || 'Failed to rename');
+    }
+  } catch(e) {
+    alert('Connection error');
+  }
+}
+
 async function saveMacros() {
   if (!currentUser) return;
   const p = parseInt(document.getElementById('mp-slider').value) || 30;
