@@ -49,7 +49,8 @@ function goPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  document.querySelector(`.nav-btn[data-page="${name}"]`).classList.add('active');
+  const navBtn = document.querySelector(`.nav-btn[data-page="${name}"]`);
+  if (navBtn) navBtn.classList.add('active');
   if (name === 'overview') { loadOverview(); loadMeals(); checkStreak(); }
   if (name === 'leaderboard') { loadLeaderboard(); }
   if (name === 'profile') { loadProfile(); loadAchievements(); }
