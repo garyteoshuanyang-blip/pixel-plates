@@ -16,7 +16,7 @@ import sys
 import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory
+from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory, Pet
 from backend.services import tdee as tdee_service
 from backend.services.vision import analyze_food_photo, analyze_food_text
 
@@ -73,6 +73,26 @@ def check_and_migrate():
                 print(f"✅ Trainer auto-promoted: {trainer_email}")
     
     print("✅ DB migration checked — all columns present")
+
+    # Pets table
+    tables = inspector.get_table_names()
+    if 'pets' not in tables:
+        from sqlalchemy import text as sql_text
+        conn.execute(sql_text("""
+            CREATE TABLE pets (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) UNIQUE,
+                name VARCHAR DEFAULT 'Pixel',
+                xp INTEGER DEFAULT 0,
+                level INTEGER DEFAULT 1,
+                happiness INTEGER DEFAULT 50,
+                hunger INTEGER DEFAULT 50,
+                last_fed TIMESTAMP DEFAULT NOW(),
+                last_played TIMESTAMP DEFAULT NOW(),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        print("✅ Created pets table")
 
 
 @app.on_event("startup")
@@ -497,6 +517,137 @@ async def get_achievements(user_id: int, db: Session = Depends(get_db)):
     return {"achievements": results, "unlocked_count": sum(1 for r in results if r["unlocked"]), "total_count": len(results)}
 
 
+# === Pet State Computation ===
+
+
+STAGE_XP_THRESHOLDS = [0, 14, 28, 42]  # stage 1, 2, 3, 4
+
+def compute_pet_state(user, pet, db):
+    """Recalculate pet level, happiness, and hunger based on user state."""
+    if not pet:
+        return None
+    # Level from XP (1-4)
+    level = 1
+    for i, threshold in enumerate(STAGE_XP_THRESHOLDS):
+        if pet.xp >= threshold:
+            level = i + 1
+        else:
+            break
+    pet.level = level
+
+    # Happiness from streak (0-100)
+    streak = user.weekly_streak or 0
+    pet.happiness = min(100, streak * 10)
+
+    # Hunger decay since last fed
+    now = datetime.utcnow()
+    if pet.last_fed:
+        hours_since_fed = (now - pet.last_fed).total_seconds() / 3600
+        pet.hunger = max(0, int(pet.hunger - hours_since_fed * 2.5))
+    pet.last_fed = now  # Reset decay timer on each load
+
+    # Happiness decay if streak broken
+    if streak == 0:
+        pet.happiness = max(0, pet.happiness - 10)
+
+    db.commit()
+    return pet
+
+
+# === Pet Endpoints ===
+
+
+@app.post("/api/pet/create/{user_id}")
+async def create_pet(user_id: int, db: Session = Depends(get_db)):
+    """Create a pet for a user (one per user). Auto-called on first load if missing."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    existing = db.query(Pet).filter(Pet.user_id == user_id).first()
+    if existing:
+        return await get_pet_data(user_id, db)
+    pet = Pet(user_id=user_id, name="Pixel")
+    db.add(pet)
+    db.commit()
+    db.refresh(pet)
+    pet = compute_pet_state(user, pet, db)
+    return {
+        "id": pet.id, "name": pet.name, "xp": pet.xp,
+        "level": pet.level, "stage": pet.level,
+        "happiness": pet.happiness, "hunger": pet.hunger,
+        "next_stage_at": STAGE_XP_THRESHOLDS[pet.level] if pet.level < 4 else None,
+    }
+
+
+@app.get("/api/pet/{user_id}")
+async def get_pet_data(user_id: int, db: Session = Depends(get_db)):
+    """Get current pet state for a user. Auto-creates if missing."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    if not pet:
+        return await create_pet(user_id, db)
+    pet = compute_pet_state(user, pet, db)
+    next_xp = STAGE_XP_THRESHOLDS[pet.level] if pet.level < 4 else None
+    return {
+        "id": pet.id, "name": pet.name, "xp": pet.xp,
+        "level": pet.level, "stage": pet.level,
+        "happiness": pet.happiness, "hunger": pet.hunger,
+        "next_stage_at": next_xp,
+        "xp_to_next": next_xp - pet.xp if next_xp else 0,
+    }
+
+
+@app.post("/api/pet/rename")
+async def rename_pet(user_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404)
+    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    if not pet:
+        raise HTTPException(404, "No pet yet")
+    pet.name = name[:20]  # Max 20 chars
+    db.commit()
+    return {"name": pet.name}
+
+
+@app.post("/api/pet/feed")
+async def feed_pet(user_id: int = Form(...), db: Session = Depends(get_db)):
+    """Feed pet: costs 5 points, +20 hunger."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404)
+    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    if not pet:
+        raise HTTPException(404, "No pet yet")
+    if (user.total_points or 0) < 5:
+        raise HTTPException(400, "Need 5 points to feed your pet")
+    user.total_points = (user.total_points or 0) - 5
+    pet.hunger = min(100, pet.hunger + 20)
+    pet.last_fed = datetime.utcnow()
+    db.commit()
+    return {"hunger": pet.hunger, "happiness": pet.happiness, "remaining_points": user.total_points}
+
+
+@app.post("/api/pet/play")
+async def play_with_pet(user_id: int = Form(...), db: Session = Depends(get_db)):
+    """Play with pet: costs 5 points, +20 happiness."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404)
+    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    if not pet:
+        raise HTTPException(404, "No pet yet")
+    if (user.total_points or 0) < 5:
+        raise HTTPException(400, "Need 5 points to play with your pet")
+    user.total_points = (user.total_points or 0) - 5
+    pet.happiness = min(100, pet.happiness + 20)
+    pet.last_played = datetime.utcnow()
+    db.commit()
+    return {"hunger": pet.hunger, "happiness": pet.happiness, "remaining_points": user.total_points}
+
+
 # === Points Calculator ===
 
 
@@ -528,6 +679,15 @@ def update_daily_points(daily, db):
     if user:
         all_points = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == user.id).scalar() or 0
         user.total_points = all_points
+        # Award XP to pet: 25 points = 1 XP
+        if total > 0:
+            pet = db.query(Pet).filter(Pet.user_id == user.id).first()
+            if pet:
+                # Convert points to XP (25:1 ratio)
+                xp_gain = total // 25
+                if xp_gain > 0:
+                    pet.xp += xp_gain
+                    compute_pet_state(user, pet, db)
     db.commit()
 
 

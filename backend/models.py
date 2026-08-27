@@ -122,6 +122,21 @@ class Inventory(Base):
     purchased_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Pet(Base):
+    __tablename__ = "pets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    name = Column(String, default="Pixel")
+    xp = Column(Integer, default=0)
+    level = Column(Integer, default=1)
+    happiness = Column(Integer, default=50)
+    hunger = Column(Integer, default=50)
+    last_fed = Column(DateTime, default=datetime.utcnow)
+    last_played = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
 
 
