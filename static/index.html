@@ -240,6 +240,16 @@
         </div>
         <div id="chart-summary" style="margin-top:8px;font-size:13px;color:var(--text-dim);text-align:center"></div>
       </div>
+      <div class="card">
+        <h2>📋 Your Food Log</h2>
+        <p class="subtitle">See your meals day by day</p>
+        <div class="tab-bar" style="margin-bottom:4px">
+          <button class="tab active" onclick="switchMyLogDays('7')">7 Days</button>
+          <button class="tab" onclick="switchMyLogDays('14')">14 Days</button>
+          <button class="tab" onclick="switchMyLogDays('30')">30 Days</button>
+        </div>
+        <div id="my-foodlog-list"><p class="muted" style="padding:12px;text-align:center">Loading...</p></div>
+      </div>
     </div>
 
     <!-- PAGE: PROFILE -->

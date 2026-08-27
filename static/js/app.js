@@ -5,6 +5,7 @@ let currentToken = null;
 let chartRange = 'week';
 let lbPeriod = 'daily';
 let cdDays = 7;
+let myLogDays = 7;
 let selectedClientId = null;
 
 // Init
@@ -54,7 +55,7 @@ function goPage(name) {
   if (name === 'overview') { loadOverview(); loadMeals(); checkStreak(); }
   if (name === 'leaderboard') { loadLeaderboard(); }
   if (name === 'profile') { loadProfile(); loadAchievements(); }
-  if (name === 'analytics') { loadChart(); }
+  if (name === 'analytics') { loadChart(); loadMyFoodLog(); }
   if (name === 'myclients') { loadMyClients(); }
   if (name === 'clientdetail') { loadClientDetail(); }
 }
@@ -658,6 +659,71 @@ async function loadChart() {
       `📊 Avg ${avgCals} cal/day · ✅ ${metDays}/${data.length} days met goal`;
   } catch(e) {
     document.getElementById('chart-summary').textContent = 'Could not load chart data';
+  }
+
+
+  }
+
+
+// === MY FOOD LOG (for clients to see own history) ===
+function switchMyLogDays(days) {
+  myLogDays = parseInt(days);
+  document.querySelectorAll('#page-analytics .tab')[0].parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  // Find the tabs in the food log card specifically
+  const cards = document.querySelectorAll('#page-analytics .card');
+  if (cards[1]) {
+    cards[1].querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    const tabs = cards[1].querySelectorAll('.tab');
+    const idx = days === '7' ? 0 : days === '14' ? 1 : 2;
+    if (tabs[idx]) tabs[idx].classList.add('active');
+  }
+  loadMyFoodLog();
+}
+
+async function loadMyFoodLog() {
+  if (!currentUser) return;
+  const container = document.getElementById('my-foodlog-list');
+  if (!container) return;
+  try {
+    const resp = await fetch(API + '/api/trainer/client-detail/' + currentUser.user_id + '?days=' + myLogDays);
+    const data = await resp.json();
+    const days = data.days;
+    if (!days.length) {
+      container.innerHTML = '<p class="muted" style="padding:12px;text-align:center">No meals logged in this period.</p>';
+      return;
+    }
+    container.innerHTML = days.map(d => {
+      const calPct = Math.min(100, (d.calories / d.goal_calories) * 100);
+      const proPct = Math.min(100, (d.protein / d.goal_protein) * 100);
+      const carbPct = Math.min(100, (d.carbs / d.goal_carbs) * 100);
+      const fatPct = Math.min(100, (d.fat / d.goal_fat) * 100);
+      const status = d.goal_met ? '✅' : '❌';
+      const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
+      const mealsHtml = d.meals.map(m => {
+        return `<div class="cd-meal">
+          <div class="cd-meal-info">
+            <span class="cd-meal-name">${m.food_name || 'Unknown'}</span>
+            <span class="cd-meal-cal">${m.calories} cal</span>
+            <span class="cd-meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="cd-day">
+        <div class="cd-day-header">
+          <span><strong>${dateLabel}</strong> ${status}</span>
+          <span class="cd-day-pts">🏆 ${d.total_points} pts</span>
+        </div>
+        <div class="cd-day-macros">
+          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${d.calories}/${d.goal_calories}</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${d.protein}/${d.goal_protein}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${d.carbs}/${d.goal_carbs}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${d.fat}/${d.goal_fat}g</span></div>
+        </div>
+        ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<p class="muted" style="padding:12px;text-align:center">Could not load food log</p>';
   }
 }
 
