@@ -591,18 +591,36 @@ async function loadChart() {
     const pad = 20, bottom = h - pad, topPad = 10;
     const chartH = h - pad - topPad;
 
+    // Draw baseline
+    ctx.fillStyle = '#334455';
+    ctx.fillRect(pad, bottom - 1, w - pad, 1);
+
+    // Goal line (single line across chart, not per bar)
+    const avgGoal = data.reduce((s, d) => s + d.goal, 0) / data.length;
+    const goalLineY = bottom - (avgGoal / maxCals) * chartH;
+
+    ctx.strokeStyle = '#ffd70044';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(pad, goalLineY);
+    ctx.lineTo(w - 5, goalLineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Goal label
+    ctx.fillStyle = '#ffd70066';
+    ctx.font = '7px Inter';
+    ctx.textAlign = 'right';
+    ctx.fillText('goal', w - 5, goalLineY - 2);
+
     data.forEach((d, i) => {
       const x = pad + i * (barW + 2);
       const calH = (d.calories / maxCals) * chartH;
-      const goalH = (d.goal / maxCals) * chartH;
-
-      // Goal line
-      ctx.fillStyle = '#ffd70088';
-      ctx.fillRect(x, bottom - goalH, barW, 2);
 
       // Calorie bar
       ctx.fillStyle = d.goal_met ? '#4ade80' : '#e94560';
-      ctx.fillRect(x, bottom - calH, barW, Math.max(calH, 2));
+      ctx.fillRect(x, bottom - calH, barW, Math.max(calH, 1));
 
       // Label
       ctx.fillStyle = '#8899aa';
