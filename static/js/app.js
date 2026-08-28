@@ -841,6 +841,25 @@ async function loadMyClients() {
 
 // === EDIT MEAL ===
 let editingMealId = null;
+let _calManuallyEdited = false;
+
+function autoCalcCalories() {
+  const pro = parseFloat(document.getElementById('edit-protein').value) || 0;
+  const carbs = parseFloat(document.getElementById('edit-carbs').value) || 0;
+  const fat = parseFloat(document.getElementById('edit-fat').value) || 0;
+  const cal = Math.round((pro * 4 + carbs * 4 + fat * 9) * 10) / 10;
+  document.getElementById('edit-calories').value = cal;
+  document.getElementById('edit-calc-badge').style.display = 'inline';
+  _calManuallyEdited = false;
+}
+
+// Track manual calorie edits
+document.addEventListener('focusin', function(e) {
+  if (e.target && e.target.id === 'edit-calories') {
+    _calManuallyEdited = true;
+    document.getElementById('edit-calc-badge').style.display = 'none';
+  }
+});
 
 function openEditMeal(id, name, cal, pro, carbs, fat) {
   editingMealId = id;
@@ -850,6 +869,8 @@ function openEditMeal(id, name, cal, pro, carbs, fat) {
   document.getElementById('edit-carbs').value = carbs || 0;
   document.getElementById('edit-fat').value = fat || 0;
   document.getElementById('edit-error').textContent = '';
+  _calManuallyEdited = false;
+  autoCalcCalories();
   document.getElementById('edit-modal').classList.remove('hidden');
 }
 
