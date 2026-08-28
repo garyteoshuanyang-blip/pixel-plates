@@ -52,7 +52,7 @@ function goPage(name) {
   document.getElementById('page-' + name).classList.add('active');
   const navBtn = document.querySelector(`.nav-btn[data-page="${name}"]`);
   if (navBtn) navBtn.classList.add('active');
-  if (name === 'overview') { loadOverview(); loadMeals(); checkStreak(); }
+  if (name === 'overview') { loadOverview(); loadMeals(); checkStreak(); loadPet(); }
   if (name === 'leaderboard') { loadLeaderboard(); }
   if (name === 'profile') { loadProfile(); loadAchievements(); }
   if (name === 'analytics') { loadChart(); loadMyFoodLog(); }
@@ -901,6 +901,111 @@ document.getElementById('edit-meal-form').addEventListener('submit', async (e) =
     document.getElementById('edit-error').textContent = 'Connection error';
   }
 });
+
+// === PET SYSTEM ===
+async function loadPet() {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch(API + '/api/pet/' + currentUser.user_id);
+    const p = await resp.json();
+    if (!resp.ok) { document.getElementById('pet-card').style.display = 'none'; return; }
+    
+    document.getElementById('pet-card').style.display = 'block';
+    document.getElementById('pet-name').textContent = p.name || 'Pixel';
+    
+    // Stage 1-4 sprite
+    const stage = p.stage || 1;
+    document.getElementById('pet-sprite').src = `/static/images/pet-stage${stage}.jpg`;
+    
+    // Level badge
+    const badge = document.getElementById('pet-level-badge');
+    const stageNames = {1: '🥚 Egg', 2: '🐣 Hatch', 3: '🐤 Chick', 4: '🐔 Adult'};
+    badge.textContent = stageNames[stage] || '🥚 Egg';
+    
+    // XP bar
+    const nextXp = p.xp_to_next || 0;
+    const totalNeeded = p.next_stage_at || 1;
+    const xpPct = p.next_stage_at ? Math.min(100, ((p.next_stage_at - nextXp) / p.next_stage_at) * 100) : 100;
+    document.getElementById('pet-xp-bar').style.width = Math.min(100, (p.xp / (totalNeeded + p.xp)) * 100) + '%';
+    document.getElementById('pet-xp-text').textContent = `${p.xp}/${totalNeeded + (p.xp)} XP`;
+    
+    // Happiness
+    document.getElementById('pet-happy-bar').style.width = (p.happiness || 0) + '%';
+    document.getElementById('pet-happy-text').textContent = (p.happiness || 0) + '%';
+    
+    // Hunger
+    document.getElementById('pet-hunger-bar').style.width = (p.hunger || 0) + '%';
+    document.getElementById('pet-hunger-text').textContent = (p.hunger || 0) + '%';
+    
+  } catch(e) {
+    console.log('Pet load error:', e);
+  }
+}
+
+async function feedPet() {
+  if (!currentUser) return;
+  const f = new FormData();
+  f.append('user_id', currentUser.user_id);
+  try {
+    const resp = await fetch(API + '/api/pet/feed', { method: 'POST', body: f });
+    const d = await resp.json();
+    if (resp.ok) {
+      document.getElementById('pet-status').textContent = '🍗 +20 hunger! -5 points';
+      document.getElementById('pet-status').style.color = 'var(--success)';
+      loadPet();
+      loadOverview();
+    } else {
+      document.getElementById('pet-status').textContent = d.detail || 'Not enough points!';
+      document.getElementById('pet-status').style.color = 'var(--danger)';
+    }
+  } catch(e) {
+    document.getElementById('pet-status').textContent = 'Error';
+  }
+  setTimeout(() => { document.getElementById('pet-status').textContent = ''; }, 3000);
+}
+
+async function playPet() {
+  if (!currentUser) return;
+  const f = new FormData();
+  f.append('user_id', currentUser.user_id);
+  try {
+    const resp = await fetch(API + '/api/pet/play', { method: 'POST', body: f });
+    const d = await resp.json();
+    if (resp.ok) {
+      document.getElementById('pet-status').textContent = '🎾 +20 happiness! -5 points';
+      document.getElementById('pet-status').style.color = 'var(--success)';
+      loadPet();
+      loadOverview();
+    } else {
+      document.getElementById('pet-status').textContent = d.detail || 'Not enough points!';
+      document.getElementById('pet-status').style.color = 'var(--danger)';
+    }
+  } catch(e) {
+    document.getElementById('pet-status').textContent = 'Error';
+  }
+  setTimeout(() => { document.getElementById('pet-status').textContent = ''; }, 3000);
+}
+
+async function renamePet() {
+  if (!currentUser) return;
+  const current = document.getElementById('pet-name').textContent;
+  const newName = prompt('Rename your pet:', current);
+  if (!newName || newName.trim() === current) return;
+  const f = new FormData();
+  f.append('user_id', currentUser.user_id);
+  f.append('name', newName.trim());
+  try {
+    const resp = await fetch(API + '/api/pet/rename', { method: 'POST', body: f });
+    if (resp.ok) {
+      document.getElementById('pet-name').textContent = newName.trim();
+      document.getElementById('pet-status').textContent = '✅ Renamed!';
+      document.getElementById('pet-status').style.color = 'var(--success)';
+    } else {
+      document.getElementById('pet-status').textContent = 'Failed to rename';
+    }
+  } catch(e) {}
+  setTimeout(() => { document.getElementById('pet-status').textContent = ''; }, 3000);
+}
 
 // === TRAINER SUMMARY ===
 async function loadTrainerSummary() {
