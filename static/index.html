@@ -160,6 +160,25 @@
         <div id="ov-meals"><p class="muted">No meals logged yet</p></div>
       </div>
 
+      <!-- PET CARD -->
+      <div class="card" id="pet-card" style="display:none">
+        <h2>🐾 <span id="pet-name">Pixel</span> <span id="pet-level-badge" class="pet-badge"></span></h2>
+        <div id="pet-sprite-area" style="text-align:center;margin:8px 0">
+          <img id="pet-sprite" src="/static/images/pet-stage1.png" style="height:120px;image-rendering:pixelated;border-radius:8px;background:var(--card);padding:4px">
+        </div>
+        <div id="pet-bars" style="margin:4px 0">
+          <div class="pet-bar-row"><span class="pet-bar-label">⚡ XP</span><div class="pet-bar-bg"><div id="pet-xp-bar" class="pet-bar-fill" style="width:0%"></div></div><span id="pet-xp-text" class="pet-bar-val">0/14</span></div>
+          <div class="pet-bar-row"><span class="pet-bar-label">❤️ Happy</span><div class="pet-bar-bg"><div id="pet-happy-bar" class="pet-bar-fill happy" style="width:0%"></div></div><span id="pet-happy-text" class="pet-bar-val">0%</span></div>
+          <div class="pet-bar-row"><span class="pet-bar-label">🍗 Hunger</span><div class="pet-bar-bg"><div id="pet-hunger-bar" class="pet-bar-fill hunger" style="width:0%"></div></div><span id="pet-hunger-text" class="pet-bar-val">0%</span></div>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="btn" style="flex:1;font-size:13px" onclick="feedPet()">🍗 Feed (5pts)</button>
+          <button class="btn" style="flex:1;font-size:13px;background:var(--accent2)" onclick="playPet()">🎾 Play (5pts)</button>
+          <button class="btn" style="flex:none;font-size:13px;padding:6px 8px;background:var(--accent)" onclick="renamePet()">✏️</button>
+        </div>
+        <p id="pet-status" class="goal-label" style="margin-top:4px"></p>
+      </div>
+
       <div class="card" id="bonus-card" style="display:none"><div id="bonus-content"></div></div>
     </div>
 
