@@ -915,7 +915,7 @@ async function loadPet() {
     
     // Stage 1-4 sprite
     const stage = p.stage || 1;
-    document.getElementById('pet-sprite').src = `/static/images/pet-stage${stage}.jpg`;
+    document.getElementById('pet-sprite').src = `/static/images/pet-stage${stage}.png`;
     
     // Level badge
     const badge = document.getElementById('pet-level-badge');
