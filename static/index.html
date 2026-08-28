@@ -136,7 +136,7 @@
 
       <!-- PET CARD -->
       <div class="card" id="pet-card" style="display:none">
-        <h2>🐾 <span id="pet-name">Pixel</span> <span id="pet-level-badge" class="pet-badge"></span></h2>
+        <h2>🐾 <span id="pet-name">Pixel</span> <span id="pet-level-badge" class="pet-badge"></span> <button style="font-size:10px;padding:1px 5px;border:none;background:var(--card);color:var(--text-dim);cursor:pointer;border-radius:4px;vertical-align:middle" onclick="renamePet()">✏️</button></h2>
         <div id="pet-sprite-area" style="text-align:center;margin:8px 0">
           <img id="pet-sprite" src="/static/images/pet-stage1.jpg" style="height:120px;image-rendering:pixelated;border-radius:8px;background:var(--card);padding:4px">
         </div>
@@ -148,7 +148,6 @@
         <div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn" style="flex:1;font-size:13px" onclick="feedPet()">🍗 Feed (5pts)</button>
           <button class="btn" style="flex:1;font-size:13px;background:var(--accent2)" onclick="playPet()">🎾 Play (5pts)</button>
-          <button class="btn" style="flex:none;font-size:11px;padding:4px 6px" onclick="renamePet()">✏️</button>
         </div>
         <p id="pet-status" class="goal-label" style="margin-top:4px"></p>
       </div>
