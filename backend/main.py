@@ -89,10 +89,17 @@ def check_and_migrate():
                 hunger INTEGER DEFAULT 50,
                 last_fed TIMESTAMP DEFAULT NOW(),
                 last_played TIMESTAMP DEFAULT NOW(),
+                last_xp_checkpoint INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """))
         print("✅ Created pets table")
+    if 'pets' in tables:
+        pet_cols = [c['name'] for c in inspector.get_columns('pets')]
+        if 'last_xp_checkpoint' not in pet_cols:
+            from sqlalchemy import text as sql_text2
+            conn.execute(sql_text2("ALTER TABLE pets ADD COLUMN last_xp_checkpoint INTEGER DEFAULT 0"))
+            print("✅ Added last_xp_checkpoint to pets table")
 
 
 @app.on_event("startup")
@@ -708,15 +715,16 @@ def update_daily_points(daily, db):
     if user:
         all_points = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == user.id).scalar() or 0
         user.total_points = all_points
-        # Award XP to pet: 25 points = 1 XP
-        if total > 0:
-            pet = db.query(Pet).filter(Pet.user_id == user.id).first()
-            if pet:
-                # Convert points to XP (25:1 ratio)
-                xp_gain = total // 25
-                if xp_gain > 0:
-                    pet.xp += xp_gain
-                    compute_pet_state(user, pet, db)
+        # Award XP to pet: 25 total points = 1 XP (cumulative, cross-day)
+        pet = db.query(Pet).filter(Pet.user_id == user.id).first()
+        if pet:
+            # Tracked checkpoint: last all_points total at which XP was awarded
+            checkpoint = pet.last_xp_checkpoint or 0
+            earned = all_points // 25 - checkpoint // 25
+            if earned > 0:
+                pet.xp += earned
+                pet.last_xp_checkpoint = all_points
+                compute_pet_state(user, pet, db)
     db.commit()
 
 

@@ -941,12 +941,11 @@ async function loadPet() {
     const stageNames = {1: '🥚 Egg', 2: '🐣 Hatch', 3: '🐤 Chick', 4: '🐔 Adult'};
     badge.textContent = stageNames[stage] || '🥚 Egg';
     
-    // XP bar
-    const nextXp = p.xp_to_next || 0;
+    // XP bar — display xp / threshold_to_next_stage
     const totalNeeded = p.next_stage_at || 1;
-    const xpPct = p.next_stage_at ? Math.min(100, ((p.next_stage_at - nextXp) / p.next_stage_at) * 100) : 100;
-    document.getElementById('pet-xp-bar').style.width = Math.min(100, (p.xp / (totalNeeded + p.xp)) * 100) + '%';
-    document.getElementById('pet-xp-text').textContent = `${p.xp}/${totalNeeded + (p.xp)} XP`;
+    const xpPct = totalNeeded > 0 ? Math.min(100, (p.xp / totalNeeded) * 100) : 100;
+    document.getElementById('pet-xp-bar').style.width = xpPct + '%';
+    document.getElementById('pet-xp-text').textContent = `${p.xp}/${totalNeeded} XP`;
     
     // Happiness
     document.getElementById('pet-happy-bar').style.width = (p.happiness || 0) + '%';

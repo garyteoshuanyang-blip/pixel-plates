@@ -134,6 +134,7 @@ class Pet(Base):
     hunger = Column(Integer, default=50)
     last_fed = Column(DateTime, default=datetime.utcnow)
     last_played = Column(DateTime, default=datetime.utcnow)
+    last_xp_checkpoint = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
