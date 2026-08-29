@@ -563,14 +563,20 @@ def compute_pet_state(user, pet, db):
 
     # Happiness decay — loses 5 per hour since last played
     if pet.last_played:
-        hours_since_play = (now - pet.last_played).total_seconds() / 3600
-        pet.happiness = max(0, min(100, pet.happiness - int(hours_since_play * 5)))
+        lp = pet.last_played
+        if lp.tzinfo:
+            lp = lp.replace(tzinfo=None)
+        hours_since_play = (now - lp).total_seconds() / 3600
+        pet.happiness = max(0, min(100, int(pet.happiness - hours_since_play * 5)))
     pet.happiness = max(0, min(100, pet.happiness))
 
     # Hunger decay — loses 2.5 per hour since last fed
     if pet.last_fed:
-        hours_since_fed = (now - pet.last_fed).total_seconds() / 3600
-        pet.hunger = max(0, min(100, pet.hunger - int(hours_since_fed * 2.5)))
+        lf = pet.last_fed
+        if lf.tzinfo:
+            lf = lf.replace(tzinfo=None)
+        hours_since_fed = (now - lf).total_seconds() / 3600
+        pet.hunger = max(0, min(100, int(pet.hunger - hours_since_fed * 2.5)))
     pet.hunger = max(0, min(100, pet.hunger))
 
     db.commit()
