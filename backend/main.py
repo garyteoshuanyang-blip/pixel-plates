@@ -94,12 +94,18 @@ def check_and_migrate():
             )
         """))
         print("✅ Created pets table")
+
+    # Migrate existing pets table: add last_xp_checkpoint
     if 'pets' in tables:
-        pet_cols = [c['name'] for c in inspector.get_columns('pets')]
-        if 'last_xp_checkpoint' not in pet_cols:
-            from sqlalchemy import text as sql_text2
-            conn.execute(sql_text2("ALTER TABLE pets ADD COLUMN last_xp_checkpoint INTEGER DEFAULT 0"))
-            print("✅ Added last_xp_checkpoint to pets table")
+        try:
+            pet_cols = [c['name'] for c in inspector.get_columns('pets')]
+            if 'last_xp_checkpoint' not in pet_cols:
+                with engine.begin() as conn2:
+                    from sqlalchemy import text as sql_text_mig
+                    conn2.execute(sql_text_mig("ALTER TABLE pets ADD COLUMN last_xp_checkpoint INTEGER DEFAULT 0"))
+                print("✅ Added last_xp_checkpoint to pets table")
+        except Exception as e:
+            print(f"⚠️ Pets migration skipped: {e}")
 
 
 @app.on_event("startup")
@@ -550,35 +556,37 @@ def compute_pet_state(user, pet, db):
     """
     if not pet:
         return None
-    # Level from XP (1-4)
-    level = 1
-    for i, threshold in enumerate(STAGE_XP_THRESHOLDS):
-        if pet.xp >= threshold:
-            level = i + 1
-        else:
-            break
-    pet.level = level
+    try:
+        # Level from XP (1-4)
+        level = 1
+        for i, threshold in enumerate(STAGE_XP_THRESHOLDS):
+            if pet.xp >= threshold:
+                level = i + 1
+            else:
+                break
+        pet.level = level
 
-    now = datetime.utcnow()
+        now = datetime.utcnow()
 
-    # Happiness decay — loses 5 per hour since last played
-    if pet.last_played:
-        lp = pet.last_played
-        if lp.tzinfo:
-            lp = lp.replace(tzinfo=None)
-        hours_since_play = (now - lp).total_seconds() / 3600
-        pet.happiness = max(0, min(100, int(pet.happiness - hours_since_play * 5)))
-    pet.happiness = max(0, min(100, pet.happiness))
+        # Happiness decay — loses 5 per hour since last played
+        if pet.last_played:
+            lp = pet.last_played
+            if lp.tzinfo:
+                lp = lp.replace(tzinfo=None)
+            hours_since_play = (now - lp).total_seconds() / 3600
+            pet.happiness = max(0, min(100, int(pet.happiness - hours_since_play * 5)))
+        pet.happiness = max(0, min(100, pet.happiness))
 
-    # Hunger decay — loses 2.5 per hour since last fed
-    if pet.last_fed:
-        lf = pet.last_fed
-        if lf.tzinfo:
-            lf = lf.replace(tzinfo=None)
-        hours_since_fed = (now - lf).total_seconds() / 3600
-        pet.hunger = max(0, min(100, int(pet.hunger - hours_since_fed * 2.5)))
-    pet.hunger = max(0, min(100, pet.hunger))
-
+        # Hunger decay — loses 2.5 per hour since last fed
+        if pet.last_fed:
+            lf = pet.last_fed
+            if lf.tzinfo:
+                lf = lf.replace(tzinfo=None)
+            hours_since_fed = (now - lf).total_seconds() / 3600
+            pet.hunger = max(0, min(100, int(pet.hunger - hours_since_fed * 2.5)))
+        pet.hunger = max(0, min(100, pet.hunger))
+    except Exception as e:
+        print(f"compute_pet_state error: {e}")
     db.commit()
     return pet
 
@@ -725,7 +733,6 @@ def update_daily_points(daily, db):
         # Award XP to pet: 25 total points = 1 XP (cumulative, cross-day)
         pet = db.query(Pet).filter(Pet.user_id == user.id).first()
         if pet:
-            # Tracked checkpoint: last all_points total at which XP was awarded
             checkpoint = pet.last_xp_checkpoint or 0
             earned = all_points // 25 - checkpoint // 25
             if earned > 0:
