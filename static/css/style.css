@@ -128,18 +128,18 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
   padding:2px 8px;border-radius:10px;vertical-align:middle;margin-left:4px;font-weight:700;
 }
 .pet-bar-row {
-  display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12px;
+  display:flex;align-items:center;gap:8px;margin:5px 0;
 }
-.pet-bar-label { width:60px;flex:none;font-weight:600; }
+.pet-bar-label { width:72px;flex:none;font-weight:600;font-size:13px; }
 .pet-bar-bg {
-  flex:1;height:10px;background:var(--bg);border-radius:5px;overflow:hidden;
+  flex:1;height:14px;background:var(--bg);border:2px solid var(--border);border-radius:3px;overflow:hidden;
 }
 .pet-bar-fill {
-  height:100%;border-radius:5px;background:var(--gold);transition:width 0.5s;
+  height:100%;background:var(--gold);transition:width 0.3s;
 }
 .pet-bar-fill.happy { background:var(--accent); }
 .pet-bar-fill.hunger { background:var(--accent2); }
-.pet-bar-val { width:50px;text-align:right;flex:none;font-size:11px;color:var(--text-dim); }
+.pet-bar-val { width:52px;text-align:right;flex:none;font-size:12px;color:var(--text-dim); }
 
 /* Leaderboard */
 .leaderboard-list { margin-top: 4px; }

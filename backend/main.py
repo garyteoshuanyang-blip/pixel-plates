@@ -545,7 +545,9 @@ async def get_achievements(user_id: int, db: Session = Depends(get_db)):
 STAGE_XP_THRESHOLDS = [0, 14, 28, 42]  # stage 1, 2, 3, 4
 
 def compute_pet_state(user, pet, db):
-    """Recalculate pet level, happiness, and hunger based on user state."""
+    """Calculate level, happiness (decay since last play), hunger (decay since last feed).
+    Bars start at 100 and deplete over time — Feed/Play restore them.
+    """
     if not pet:
         return None
     # Level from XP (1-4)
@@ -557,20 +559,19 @@ def compute_pet_state(user, pet, db):
             break
     pet.level = level
 
-    # Happiness from streak (0-100)
-    streak = user.weekly_streak or 0
-    pet.happiness = min(100, streak * 10)
-
-    # Hunger decay since last fed
     now = datetime.utcnow()
+
+    # Happiness decay — loses 5 per hour since last played
+    if pet.last_played:
+        hours_since_play = (now - pet.last_played).total_seconds() / 3600
+        pet.happiness = max(0, min(100, pet.happiness - int(hours_since_play * 5)))
+    pet.happiness = max(0, min(100, pet.happiness))
+
+    # Hunger decay — loses 2.5 per hour since last fed
     if pet.last_fed:
         hours_since_fed = (now - pet.last_fed).total_seconds() / 3600
-        pet.hunger = max(0, int(pet.hunger - hours_since_fed * 2.5))
-    pet.last_fed = now  # Reset decay timer on each load
-
-    # Happiness decay if streak broken
-    if streak == 0:
-        pet.happiness = max(0, pet.happiness - 10)
+        pet.hunger = max(0, min(100, pet.hunger - int(hours_since_fed * 2.5)))
+    pet.hunger = max(0, min(100, pet.hunger))
 
     db.commit()
     return pet
