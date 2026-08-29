@@ -230,6 +230,21 @@ async def get_my_clients(trainer_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@app.delete("/api/trainer/remove-client/{client_id}")
+async def remove_client(client_id: int, db: Session = Depends(get_db)):
+    """Remove a client and all their data (meals, daily_logs, pet, inventory)."""
+    user = db.query(User).filter(User.id == client_id, User.role == 'client').first()
+    if not user:
+        raise HTTPException(404, "Client not found")
+    db.query(Meal).filter(Meal.user_id == client_id).delete()
+    db.query(DailyLog).filter(DailyLog.user_id == client_id).delete()
+    db.query(Pet).filter(Pet.user_id == client_id).delete()
+    db.query(Inventory).filter(Inventory.user_id == client_id).delete()
+    db.delete(user)
+    db.commit()
+    return {"ok": True, "deleted": client_id}
+
+
 @app.get("/api/trainer/client-detail/{client_id}")
 async def get_client_detail(client_id: int, days: int = 7, date_str: str = None, db: Session = Depends(get_db)):
     """Get a client's recent daily logs with meals.

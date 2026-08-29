@@ -828,14 +828,33 @@ async function loadMyClients() {
       return;
     }
     list.innerHTML = clients.map(c => `
-      <div class="client-row" onclick="viewClientDetail(${c.id}, '${c.name.replace(/'/g, "\\'")}')">
-        <span class="client-name">${c.name}</span>
-        <span class="client-pts">🏆 ${c.total_points} pts</span>
-        <span class="client-arrow">▶</span>
+      <div class="client-row">
+        <div class="client-row-main" onclick="viewClientDetail(${c.id}, '${c.name.replace(/'/g, "\\'")}')">
+          <span class="client-name">${c.name}</span>
+          <span class="client-pts">🏆 ${c.total_points} pts</span>
+          <span class="client-arrow">▶</span>
+        </div>
+        <button class="client-remove-btn" onclick="removeClient(${c.id}, '${c.name.replace(/'/g, "\\'")}')" title="Remove client">✕</button>
       </div>
     `).join('');
   } catch(e) {
     list.innerHTML = '<p class="muted">Could not load clients</p>';
+  }
+}
+
+async function removeClient(clientId, clientName) {
+  if (!confirm(`⚠️ Remove ${clientName} and ALL their data?\n\nThis will delete their meals, logs, pet, and inventory. This cannot be undone.`)) return;
+  if (!confirm(`Are you really sure? This deletes EVERYTHING for ${clientName}.`)) return;
+  try {
+    const resp = await fetch(API + '/api/trainer/remove-client/' + clientId, { method: 'DELETE' });
+    if (resp.ok) {
+      loadMyClients();
+    } else {
+      const d = await resp.json();
+      alert(d.detail || 'Failed to remove client');
+    }
+  } catch(e) {
+    alert('Connection error');
   }
 }
 
