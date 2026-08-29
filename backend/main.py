@@ -568,6 +568,16 @@ def compute_pet_state(user, pet, db):
 
         now = datetime.utcnow()
 
+        # One-time migration for existing pets from old system:
+        # Old code set happiness = streak*10 (typically 0) and last_played only at creation.
+        # If happiness is 0 and last_played is ancient, it's old data — give fresh start.
+        if pet.happiness == 0 and pet.last_played and (now - pet.last_played.replace(tzinfo=None)).total_seconds() > 86400:
+            pet.happiness = 100
+            pet.last_played = now
+        if pet.hunger <= 50 and pet.last_fed and (now - pet.last_fed.replace(tzinfo=None)).total_seconds() > 86400:
+            pet.hunger = 100
+            pet.last_fed = now
+
         # Happiness decay — loses 5 per hour since last played
         if pet.last_played:
             lp = pet.last_played
