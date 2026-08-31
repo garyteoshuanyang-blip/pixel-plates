@@ -353,11 +353,13 @@ async def get_leaderboard(period: str = "daily", db: Session = Depends(get_db)):
         since = today - timedelta(days=30)
     elif period == "yearly":
         since = today - timedelta(days=365)
+    elif period == "all":
+        since = None
     else:
         since = today
 
-    # Aggregate points per user in the period
-    rows = db.query(
+    # Build query
+    q = db.query(
         DailyLog.user_id,
         func.sum(DailyLog.points_calories).label("cal_points"),
         func.sum(DailyLog.points_protein).label("pro_points"),
@@ -365,10 +367,10 @@ async def get_leaderboard(period: str = "daily", db: Session = Depends(get_db)):
         func.sum(DailyLog.points_fat).label("fat_points"),
         func.sum(DailyLog.total_points).label("total_points"),
         func.count(DailyLog.id).label("days_logged"),
-    ).filter(
-        DailyLog.date >= since,
-        DailyLog.date <= today,
-    ).group_by(DailyLog.user_id).order_by(func.sum(DailyLog.total_points).desc().nullslast()).all()
+    )
+    if since is not None:
+        q = q.filter(DailyLog.date >= since, DailyLog.date <= today)
+    rows = q.group_by(DailyLog.user_id).order_by(func.sum(DailyLog.total_points).desc().nullslast()).all()
 
     result = []
     for i, row in enumerate(rows):
@@ -412,33 +414,34 @@ async def get_my_rank(user_id: int, period: str = "daily", db: Session = Depends
         since = today - timedelta(days=30)
     elif period == "yearly":
         since = today - timedelta(days=365)
+    elif period == "all":
+        since = None
     else:
         since = today
 
     # My points
-    my_row = db.query(
+    q = db.query(
         func.sum(DailyLog.points_calories).label("cal_points"),
         func.sum(DailyLog.points_protein).label("pro_points"),
         func.sum(DailyLog.points_carbs).label("carb_points"),
         func.sum(DailyLog.points_fat).label("fat_points"),
         func.sum(DailyLog.total_points).label("total_points"),
         func.count(DailyLog.id).label("days_logged"),
-    ).filter(
-        DailyLog.user_id == user_id,
-        DailyLog.date >= since,
-        DailyLog.date <= today,
-    ).first()
+    ).filter(DailyLog.user_id == user_id)
+    if since is not None:
+        q = q.filter(DailyLog.date >= since, DailyLog.date <= today)
+    my_row = q.first()
 
     # My rank: count distinct users with more total points
     my_total = int(my_row.total_points or 0) if my_row else 0
     # Get all user totals, count how many are above me
-    all_totals = db.query(
+    q2 = db.query(
         DailyLog.user_id,
         func.sum(DailyLog.total_points).label("total")
-    ).filter(
-        DailyLog.date >= since,
-        DailyLog.date <= today,
-    ).group_by(DailyLog.user_id).all()
+    )
+    if since is not None:
+        q2 = q2.filter(DailyLog.date >= since, DailyLog.date <= today)
+    all_totals = q2.group_by(DailyLog.user_id).all()
     rank = 1 + sum(1 for t in all_totals if int(t.total or 0) > my_total)
     total_participants = len(all_totals)
 
@@ -740,6 +743,9 @@ def update_daily_points(daily, db):
                 pet.xp += earned
                 pet.last_xp_checkpoint = all_points
                 compute_pet_state(user, pet, db)
+            # Perfect day bonus: all 4 targets hit (25/25) → +10 happiness
+            if total >= 25:
+                pet.happiness = min(100, pet.happiness + 10)
     db.commit()
 
 

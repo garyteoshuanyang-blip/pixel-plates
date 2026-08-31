@@ -353,7 +353,7 @@ function streakEmoji(days) {
 function switchLeaderboard(period) {
   lbPeriod = period;
   document.querySelectorAll('#page-leaderboard .tab').forEach(t => t.classList.remove('active'));
-  const tabs = ['daily','weekly','monthly','yearly'];
+  const tabs = ['daily','weekly','monthly','yearly','all'];
   document.querySelectorAll('#page-leaderboard .tab')[tabs.indexOf(period)].classList.add('active');
   loadLeaderboard();
 }
@@ -381,7 +381,8 @@ async function loadLeaderboard() {
 
     const lb = data.leaderboard;
     if (!lb.length) {
-      list.innerHTML = '<p class="muted">No entries yet this ' + lbPeriod + '</p>';
+      const periodLabel = lbPeriod === 'all' ? 'all time' : lbPeriod;
+      list.innerHTML = '<p class="muted">No entries yet ' + periodLabel + '</p>';
       return;
     }
 
