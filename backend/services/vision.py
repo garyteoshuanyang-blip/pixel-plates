@@ -5,7 +5,7 @@ import os
 import base64
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-VISION_MODEL = "openai/gpt-4o"
+VISION_MODEL = "google/gemini-2.5-flash"
 
 
 async def analyze_food_photo(image_path: str) -> dict:
@@ -80,7 +80,7 @@ async def analyze_food_text(food_description: str) -> dict:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "openai/gpt-4o-mini",
+                    "model": "google/gemini-2.5-flash",
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": 300,
                 },
