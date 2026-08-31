@@ -922,6 +922,17 @@ document.getElementById('edit-meal-form').addEventListener('submit', async (e) =
 });
 
 // === PET SYSTEM ===
+// === Pet Mood ===
+function getPetMood(happy, hungry) {
+  if (happy < 20) return "💤 Sleeping... wake me with Play!";
+  if (hungry < 20) return "🤢 Starving! Please feed me...";
+  if (happy > 80 && hungry > 80) return "🥰 Thriving! Full belly and happy!";
+  if (happy > 80 && hungry < 50) return "🙂 Happy but getting peckish...";
+  if (happy < 50 && hungry > 80) return "😐 Full but bored... play with me!";
+  if (happy < 50 && hungry < 50) return "😕 Not great... Feed & play?";
+  return "🙂 Doing alright";
+}
+
 async function loadPet() {
   if (!currentUser) return;
   try {
@@ -954,6 +965,9 @@ async function loadPet() {
     // Hunger
     document.getElementById('pet-hunger-bar').style.width = (p.hunger || 0) + '%';
     document.getElementById('pet-hunger-text').textContent = (p.hunger || 0) + '%';
+    
+    // Mood message based on happiness + hunger
+    document.getElementById('pet-mood').textContent = getPetMood(p.happiness || 0, p.hunger || 0);
     
   } catch(e) {
     console.log('Pet load error:', e);
