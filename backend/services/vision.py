@@ -69,6 +69,58 @@ async def analyze_food_photo(image_path: str) -> dict:
             return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "error": str(e)}
 
 
+async def adjust_meal_nutrition(meal_name: str, current_calories: float, current_protein: float, current_carbs: float, current_fat: float, adjustment_text: str) -> dict:
+    """Use AI to adjust meal nutrition based on user's natural language edit.
+    e.g. 'I didn't eat the rice', 'the portion was smaller', 'I added extra egg'.
+    Returns adjusted values that the user can review before saving.
+    """
+    if not OPENROUTER_API_KEY:
+        return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat}
+
+    prompt = (
+        f"A meal was logged as '{meal_name}' with these estimated values:\n"
+        f"- Calories: {current_calories}\n"
+        f"- Protein: {current_protein}g\n"
+        f"- Carbs: {current_carbs}g\n"
+        f"- Fat: {current_fat}g\n\n"
+        f"The user says: \"{adjustment_text}\"\n\n"
+        "Adjust the nutrition based on what the user described. "
+        "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
+        '{"calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}\n'
+        "Keep values realistic for a single meal. If unsure, make a reasonable estimate."
+    )
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            resp = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": VISION_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 200,
+                },
+            )
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"]
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+            result = json.loads(content)
+            return {
+                "calories": _get_key(result, "calories", default=current_calories),
+                "protein_g": _get_key(result, "protein_g", "protein", default=current_protein),
+                "carbs_g": _get_key(result, "carbs_g", "carbs", default=current_carbs),
+                "fat_g": _get_key(result, "fat_g", "fat", default=current_fat),
+            }
+        except Exception as e:
+            return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat, "error": str(e)}
+
+
 async def analyze_food_text(food_description: str) -> dict:
     if not OPENROUTER_API_KEY:
         return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}

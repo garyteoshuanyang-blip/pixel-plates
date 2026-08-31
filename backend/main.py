@@ -18,7 +18,7 @@ import subprocess
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory, Pet
 from backend.services import tdee as tdee_service
-from backend.services.vision import analyze_food_photo, analyze_food_text
+from backend.services.vision import analyze_food_photo, analyze_food_text, adjust_meal_nutrition
 
 # Generate cache-busting version that changes every deploy
 try:
@@ -1115,6 +1115,36 @@ async def edit_meal(
         "protein": meal.user_protein or meal.ai_protein or 0,
         "carbs": meal.user_carbs or meal.ai_carbs or 0,
         "fat": meal.user_fat or meal.ai_fat or 0,
+    }
+
+
+# === AI Adjust Meal ===
+
+
+@app.post("/api/meals/{meal_id}/ai-adjust")
+async def ai_adjust_meal(meal_id: int, adjustment_text: str = Form(...), db: Session = Depends(get_db)):
+    """Use AI to adjust meal nutrition based on user's natural language edit.
+    Returns adjusted values for the user to review — does NOT save automatically.
+    """
+    meal = db.query(Meal).filter(Meal.id == meal_id).first()
+    if not meal:
+        raise HTTPException(404, "Meal not found")
+
+    current_name = meal.food_name or "Unknown"
+    current_cal = meal.user_calories or meal.ai_calories or 0
+    current_pro = meal.user_protein or meal.ai_protein or 0
+    current_carb = meal.user_carbs or meal.ai_carbs or 0
+    current_fat = meal.user_fat or meal.ai_fat or 0
+
+    result = await adjust_meal_nutrition(
+        current_name, current_cal, current_pro, current_carb, current_fat, adjustment_text
+    )
+
+    return {
+        "calories": result.get("calories", current_cal),
+        "protein_g": result.get("protein_g", current_pro),
+        "carbs_g": result.get("carbs_g", current_carb),
+        "fat_g": result.get("fat_g", current_fat),
     }
 
 
