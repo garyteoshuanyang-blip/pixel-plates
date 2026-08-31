@@ -897,6 +897,45 @@ function openEditMeal(id, name, cal, pro, carbs, fat) {
 function closeEditMeal() {
   document.getElementById('edit-modal').classList.add('hidden');
   editingMealId = null;
+  document.getElementById('ai-adjust-status').textContent = '';
+}
+
+async function aiAdjustMeal() {
+  if (!editingMealId) return;
+  const textEl = document.getElementById('ai-adjust-text');
+  const statusEl = document.getElementById('ai-adjust-status');
+  const text = textEl.value.trim();
+  if (!text) {
+    statusEl.textContent = '⚠️ Type what to change first';
+    return;
+  }
+  const btn = document.getElementById('ai-adjust-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Adjusting...';
+  statusEl.textContent = '';
+  const f = new FormData();
+  f.append('adjustment_text', text);
+  try {
+    const resp = await fetch(API + '/api/meals/' + editingMealId + '/ai-adjust', { method: 'POST', body: f });
+    const data = await resp.json();
+    if (!resp.ok) {
+      statusEl.textContent = data.detail || 'Failed to adjust';
+    } else {
+      document.getElementById('edit-calories').value = data.calories;
+      document.getElementById('edit-protein').value = data.protein_g;
+      document.getElementById('edit-carbs').value = data.carbs_g;
+      document.getElementById('edit-fat').value = data.fat_g;
+      document.getElementById('edit-calc-badge').style.display = 'none';
+      _calManuallyEdited = true;
+      statusEl.textContent = '✅ Adjusted! Review the numbers, then Save.';
+      textEl.value = '';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Connection error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 AI Adjust';
+  }
 }
 
 document.getElementById('edit-meal-form').addEventListener('submit', async (e) => {

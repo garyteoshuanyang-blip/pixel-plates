@@ -188,6 +188,12 @@
       <div class="modal-card">
         <h2>✏️ Edit Meal</h2>
         <form id="edit-meal-form">
+          <div id="ai-adjust-section" style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px">
+            <label style="font-size:12px;color:var(--accent);font-weight:600">🤖 AI Adjust</label>
+            <textarea id="ai-adjust-text" rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;resize:none" placeholder="e.g. I didn't eat the rice, the chicken portion was smaller..."></textarea>
+            <button type="button" id="ai-adjust-btn" class="btn" style="font-size:12px;margin-top:6px;padding:6px 12px" onclick="aiAdjustMeal()">🤖 AI Adjust</button>
+            <div id="ai-adjust-status" style="font-size:11px;margin-top:4px;color:var(--muted)"></div>
+          </div>
           <label>Food Name</label>
           <input type="text" id="edit-food-name">
           <label>Calories <span id="edit-calc-badge" style="display:none;font-size:10px;color:var(--accent);font-weight:normal">⚡ auto</span></label>
