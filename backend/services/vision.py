@@ -8,7 +8,16 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 VISION_MODEL = "google/gemini-2.5-flash"
 
 
+def _get_key(r, *keys, default=0):
+    """Try multiple key names (Gemini vs GPT-4o style JSON)."""
+    for k in keys:
+        val = r.get(k)
+        if val is not None:
+            return val
+    return default
+
 async def analyze_food_photo(image_path: str) -> dict:
+    """Analyze a food photo and estimate nutritional content using OpenRouter vision API."""
     if not OPENROUTER_API_KEY:
         return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
 
@@ -50,10 +59,10 @@ async def analyze_food_photo(image_path: str) -> dict:
                 content = content.split("```")[1].split("```")[0].strip()
             result = json.loads(content)
             return {
-                "total_calories": result.get("total_calories", 0),
-                "protein_g": result.get("total_protein_g", 0),
-                "carbs_g": result.get("total_carbs_g", 0),
-                "fat_g": result.get("total_fat_g", 0),
+                "total_calories": _get_key(result, "total_calories", "calories", default=0),
+                "protein_g": _get_key(result, "total_protein_g", "protein_g", "protein"),
+                "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
+                "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
                 "foods": result.get("foods", []),
             }
         except Exception as e:
@@ -93,10 +102,10 @@ async def analyze_food_text(food_description: str) -> dict:
                 content = content.split("```")[1].split("```")[0].strip()
             result = json.loads(content)
             return {
-                "total_calories": result.get("total_calories", 0),
-                "protein_g": result.get("total_protein_g", 0),
-                "carbs_g": result.get("total_carbs_g", 0),
-                "fat_g": result.get("total_fat_g", 0),
+                "total_calories": _get_key(result, "total_calories", "calories", default=0),
+                "protein_g": _get_key(result, "total_protein_g", "protein_g", "protein"),
+                "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
+                "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
                 "foods": result.get("foods", []),
             }
         except Exception as e:
