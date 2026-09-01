@@ -8,6 +8,12 @@ let cdDays = 7;
 let myLogDays = 7;
 let selectedClientId = null;
 
+// Round floats for display: 108.30000000000003 → 108.3, 209.0000001 → 209
+function fmt(n) {
+  const v = Math.round((parseFloat(n) || 0) * 10) / 10;
+  return (v % 1 === 0) ? v : v.toFixed(1);
+}
+
 // Init
 (function init() {
   const saved = localStorage.getItem('pixelplates_user');
@@ -229,8 +235,8 @@ async function loadOverview() {
     document.getElementById('ov-streak').textContent = d.streak;
     document.getElementById('ov-points').textContent = d.total_points;
     document.getElementById('ov-credits').textContent = d.credits;
-    document.getElementById('ov-cal').textContent = d.today.total_calories;
-    document.getElementById('ov-goal').textContent = d.today.goal;
+    document.getElementById('ov-cal').textContent = fmt(d.today.total_calories);
+    document.getElementById('ov-goal').textContent = fmt(d.today.goal);
 
     const pct = Math.min(100, (d.today.total_calories / d.today.goal) * 100);
     document.getElementById('ov-cal-progress').style.width = pct + '%';
@@ -239,7 +245,7 @@ async function loadOverview() {
     if (d.today.goal_met) { s.textContent = '✅ Goal met!'; s.style.color = 'var(--success)'; }
     else if (d.today.meal_count > 0) {
       const r = d.today.goal - d.today.total_calories;
-      s.textContent = r > 0 ? `🍽️ ${r} cal remaining` : `⚠️ Over by ${Math.abs(r)} cal`;
+      s.textContent = r > 0 ? `🍽️ ${fmt(r)} cal remaining` : `⚠️ Over by ${fmt(Math.abs(r))} cal`;
       s.style.color = 'var(--warn)';
     } else { s.textContent = '📸 Log a meal!'; s.style.color = 'var(--text-dim)'; }
 
@@ -247,13 +253,13 @@ async function loadOverview() {
     document.getElementById('ov-macros').innerHTML =
       `<div class="macro-row"><span class="macro-label" style="color:var(--accent)">Protein</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill protein" style="width:${Math.min(100,(t.total_protein/(t.goal_protein||1))*100)}%"></div></div>
-        <span class="macro-value">${t.total_protein}/${t.goal_protein}g</span></div>` +
+        <span class="macro-value">${fmt(t.total_protein)}/${fmt(t.goal_protein)}g</span></div>` +
       `<div class="macro-row"><span class="macro-label" style="color:var(--gold)">Carbs</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill carbs" style="width:${Math.min(100,(t.total_carbs/(t.goal_carbs||1))*100)}%"></div></div>
-        <span class="macro-value">${t.total_carbs}/${t.goal_carbs}g</span></div>` +
+        <span class="macro-value">${fmt(t.total_carbs)}/${fmt(t.goal_carbs)}g</span></div>` +
       `<div class="macro-row"><span class="macro-label" style="color:var(--accent2)">Fat</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fat" style="width:${Math.min(100,(t.total_fat/(t.goal_fat||1))*100)}%"></div></div>
-        <span class="macro-value">${t.total_fat}/${t.goal_fat}g</span></div>`;
+        <span class="macro-value">${fmt(t.total_fat)}/${fmt(t.goal_fat)}g</span></div>`;
   } catch(e) {}
 }
 
@@ -267,10 +273,10 @@ async function loadMeals() {
     if (!meals.length) { list.innerHTML = '<p class="muted">No meals logged yet</p>'; return; }
     list.innerHTML = meals.map(m =>
       `<div class="meal-item">
-        <span class="cal">${m.calories}</span>
-        <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span></span>
+        <span class="cal">${fmt(m.calories)}</span>
+        <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span></span>
         <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
-        <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${m.calories},${m.protein},${m.carbs},${m.fat})">✏️</button>
+        <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${fmt(m.calories)},${fmt(m.protein)},${fmt(m.carbs)},${fmt(m.fat)})">✏️</button>
         <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
       </div>`).join('');
   } catch(e) {}
@@ -303,8 +309,8 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
     const r = document.getElementById('meal-result');
     if (resp.ok) {
       document.getElementById('meal-result-text').innerHTML =
-        `<strong>${data.food_name}</strong>: ${data.calories} cal · P:${data.protein}g C:${data.carbs}g F:${data.fat}g<br>
-        Daily: ${data.daily_total}/${data.goal} cal · P:${data.daily_protein}/${data.goal_protein}g`;
+        `<strong>${data.food_name}</strong>: ${fmt(data.calories)} cal · P:${fmt(data.protein)}g C:${fmt(data.carbs)}g F:${fmt(data.fat)}g<br>
+        Daily: ${fmt(data.daily_total)}/${fmt(data.goal)} cal · P:${fmt(data.daily_protein)}/${fmt(data.goal_protein)}g`;
       r.classList.remove('hidden');
       document.getElementById('meal-photo-camera').value = ''; document.getElementById('meal-photo-gallery').value = ''; document.getElementById('meal-name').value = '';
       document.getElementById('photo-preview').textContent = '';
@@ -704,8 +710,8 @@ async function loadMyFoodLog() {
         return `<div class="cd-meal">
           <div class="cd-meal-info">
             <span class="cd-meal-name">${m.food_name || 'Unknown'}</span>
-            <span class="cd-meal-cal">${m.calories} cal</span>
-            <span class="cd-meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span>
+            <span class="cd-meal-cal">${fmt(m.calories)} cal</span>
+            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>
           </div>
         </div>`;
       }).join('');
@@ -715,10 +721,10 @@ async function loadMyFoodLog() {
           <span class="cd-day-pts">🏆 ${d.total_points} pts</span>
         </div>
         <div class="cd-day-macros">
-          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${d.calories}/${d.goal_calories}</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${d.protein}/${d.goal_protein}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${d.carbs}/${d.goal_carbs}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${d.fat}/${d.goal_fat}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${fmt(d.calories)}/${fmt(d.goal_calories)}</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
@@ -809,8 +815,8 @@ async function loadClientDetail() {
         return `<div class="cd-meal">
           <div class="cd-meal-info">
             <span class="cd-meal-name">${m.food_name || 'Unknown'}</span>
-            <span class="cd-meal-cal">${m.calories} cal</span>
-            <span class="cd-meal-macros">P:${m.protein}g C:${m.carbs}g F:${m.fat}g</span>
+            <span class="cd-meal-cal">${fmt(m.calories)} cal</span>
+            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>
           </div>
         </div>`;
       }).join('');
@@ -820,10 +826,10 @@ async function loadClientDetail() {
           <span class="cd-day-pts">🏆 ${d.total_points} pts</span>
         </div>
         <div class="cd-day-macros">
-          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${d.calories}/${d.goal_calories}</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${d.protein}/${d.goal_protein}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${d.carbs}/${d.goal_carbs}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${d.fat}/${d.goal_fat}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label">Cal</span><div class="cd-bar-bg"><div class="cd-bar-fill" style="width:${calPct}%"></div></div><span class="cd-macro-val">${fmt(d.calories)}/${fmt(d.goal_calories)}</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
@@ -901,10 +907,10 @@ document.addEventListener('focusin', function(e) {
 function openEditMeal(id, name, cal, pro, carbs, fat) {
   editingMealId = id;
   document.getElementById('edit-food-name').value = name || '';
-  document.getElementById('edit-calories').value = cal || 0;
-  document.getElementById('edit-protein').value = pro || 0;
-  document.getElementById('edit-carbs').value = carbs || 0;
-  document.getElementById('edit-fat').value = fat || 0;
+  document.getElementById('edit-calories').value = fmt(cal) || 0;
+  document.getElementById('edit-protein').value = fmt(pro) || 0;
+  document.getElementById('edit-carbs').value = fmt(carbs) || 0;
+  document.getElementById('edit-fat').value = fmt(fat) || 0;
   document.getElementById('edit-error').textContent = '';
   _calManuallyEdited = false;
   autoCalcCalories();
