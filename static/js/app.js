@@ -950,7 +950,6 @@ async function aiAdjustMeal() {
       document.getElementById('edit-carbs').value = data.carbs_g;
       document.getElementById('edit-fat').value = data.fat_g;
       document.getElementById('edit-calc-badge').style.display = 'none';
-      _calManuallyEdited = true;
       statusEl.textContent = '✅ Adjusted! Review the numbers, then Save.';
       textEl.value = '';
     }
