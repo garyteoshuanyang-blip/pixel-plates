@@ -887,12 +887,13 @@ let editingMealId = null;
 let _calManuallyEdited = false;
 
 function autoCalcCalories() {
+  if (_calManuallyEdited) return;  // Don't overwrite if user manually set calories
   const pro = parseFloat(document.getElementById('edit-protein').value) || 0;
   const carbs = parseFloat(document.getElementById('edit-carbs').value) || 0;
   const fat = parseFloat(document.getElementById('edit-fat').value) || 0;
   const cal = Math.round((pro * 4 + carbs * 4 + fat * 9) * 10) / 10;
   document.getElementById('edit-calories').value = cal;
-  document.getElementById('edit-calc-badge').style.display = 'inline';
+  document.getElementById('edit-calc-badge').style.display = _calManuallyEdited ? 'none' : 'inline';
   _calManuallyEdited = false;
 }
 
