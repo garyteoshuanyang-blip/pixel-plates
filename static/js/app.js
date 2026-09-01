@@ -737,9 +737,11 @@ function viewClientDetail(clientId, clientName) {
   document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
   const tabs = document.querySelectorAll('#page-clientdetail .tab');
   if (tabs[0]) tabs[0].classList.add('active');
-  // Clear date picker
+  // Clear date picker and reset button
   const dp = document.getElementById('cd-date-picker');
   if (dp) dp.value = '';
+  const resetBtn = document.getElementById('cd-date-reset');
+  if (resetBtn) resetBtn.style.display = 'none';
   // Clear old data immediately
   const container = document.getElementById('cd-list');
   if (container) container.innerHTML = '<p class="muted" style="padding:20px;text-align:center">Loading...</p>';
@@ -751,9 +753,11 @@ function switchClientDays(days) {
   document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
   const idx = days === '7' ? 0 : days === '14' ? 1 : 2;
   document.querySelectorAll('#page-clientdetail .tab')[idx].classList.add('active');
-  // Set date picker to today
+  // Clear date picker and reset button
   const dp = document.getElementById('cd-date-picker');
   if (dp) dp.value = '';
+  const resetBtn = document.getElementById('cd-date-reset');
+  if (resetBtn) resetBtn.style.display = 'none';
   loadClientDetail();
 }
 
@@ -761,6 +765,19 @@ function goToClientDate() {
   const datePicker = document.getElementById('cd-date-picker');
   if (!datePicker || !datePicker.value) return;
   cdDays = 1;
+  document.getElementById('cd-date-reset').style.display = 'inline-block';
+  loadClientDetail();
+}
+
+function resetClientDate() {
+  const dp = document.getElementById('cd-date-picker');
+  if (dp) dp.value = '';
+  document.getElementById('cd-date-reset').style.display = 'none';
+  cdDays = 7;
+  // Reset tabs to 7 Days
+  document.querySelectorAll('#page-clientdetail .tab').forEach(t => t.classList.remove('active'));
+  const tabs = document.querySelectorAll('#page-clientdetail .tab');
+  if (tabs[0]) tabs[0].classList.add('active');
   loadClientDetail();
 }
 
