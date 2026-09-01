@@ -17,18 +17,35 @@ def _get_key(r, *keys, default=0):
     return default
 
 async def analyze_food_photo(image_path: str) -> dict:
-    """Analyze a food photo and estimate nutritional content using OpenRouter vision API."""
+    """Analyze any food-related image using OpenRouter vision API.
+    Auto-detects the type of image:
+    - Food photo: estimate nutritional content
+    - Nutrition label: extract exact per-serving values
+    - Receipt / order list: list food items + estimate macros
+    """
     if not OPENROUTER_API_KEY:
-        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
+        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "unknown"}
 
     with open(image_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
 
     prompt = (
-        "Estimate the nutritional content of this food photo. "
-        "Respond ONLY with valid JSON: "
-        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N}'
+        "Examine this image and determine what it shows. It could be:\n"
+        "1. A FOOD PHOTO — estimate the nutritional content\n"
+        "2. A NUTRITION LABEL — extract the exact per-serving values\n"
+        "3. A RECEIPT or FOOD ORDER LIST — list every food item with estimated macros\n\n"
+        "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
+        '{"scan_type": "food|label|receipt", '
+        '"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N'
+        '}\n\n'
+        "Rules:\n"
+        "- If nutrition label: read the printed serving size and per-serving numbers exactly. "
+        "Set scan_type='label'. Use serving_size field if possible.\n"
+        "- If receipt/order: list each food item as a separate entry in foods[]. "
+        "Total should be sum of all items. Set scan_type='receipt'.\n"
+        "- If food photo: estimate portions visually. Set scan_type='food'.\n"
+        "- Keep realistic values. If unsure, make a reasonable estimate."
     )
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -48,7 +65,7 @@ async def analyze_food_photo(image_path: str) -> dict:
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
                         ],
                     }],
-                    "max_tokens": 500,
+                    "max_tokens": 800,
                 },
             )
             data = resp.json()
@@ -64,9 +81,11 @@ async def analyze_food_photo(image_path: str) -> dict:
                 "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
                 "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
                 "foods": result.get("foods", []),
+                "scan_type": result.get("scan_type", "food"),
+                "serving_size": result.get("serving_size", ""),
             }
         except Exception as e:
-            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "error": str(e)}
+            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "error", "serving_size": "", "error": str(e)}
 
 
 async def adjust_meal_nutrition(meal_name: str, current_calories: float, current_protein: float, current_carbs: float, current_fat: float, adjustment_text: str) -> dict:
