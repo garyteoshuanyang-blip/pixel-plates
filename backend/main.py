@@ -58,6 +58,10 @@ def check_and_migrate():
         for col in ['points_calories', 'points_protein', 'points_carbs', 'points_fat', 'total_points']:
             if col not in daily_cols:
                 conn.execute(sql_text(f"ALTER TABLE daily_logs ADD COLUMN {col} INTEGER DEFAULT 0"))
+        # Meals table
+        meals_cols = [c['name'] for c in inspector.get_columns('meals')]
+        if 'nutrition_comment' not in meals_cols:
+            conn.execute(sql_text("ALTER TABLE meals ADD COLUMN nutrition_comment VARCHAR"))
     # Auto-promote designated trainer email
     trainer_email = os.getenv("TRAINER_EMAIL", "")
     if trainer_email:
@@ -318,6 +322,7 @@ async def get_client_detail(client_id: int, days: int = 7, date_str: str = None,
                 "fat": m.user_fat or m.ai_fat or 0,
                 "photo_path": m.photo_path,
                 "notes": m.notes,
+                "nutrition_comment": m.nutrition_comment,
                 "time": m.created_at.replace(tzinfo=timezone.utc).astimezone(SGT).isoformat() if m.created_at else None,
             } for m in meals],
         })
@@ -938,6 +943,7 @@ async def create_meal(
         ai_fat=result.get("fat_g", 0),
         user_calories=calories,
         notes=notes,
+        nutrition_comment=result.get("comment", ""),
     )
     db.add(meal)
 
@@ -988,6 +994,7 @@ async def create_meal(
         "carbs": result.get("carbs_g", 0),
         "fat": result.get("fat_g", 0),
         "ai_calories": ai_calories,
+        "nutrition_comment": result.get("comment", ""),
         "daily_total": daily.total_calories,
         "daily_protein": daily.total_protein,
         "daily_carbs": daily.total_carbs,
@@ -1027,6 +1034,7 @@ async def get_meals(user_id: int, date_str: str = None, db: Session = Depends(ge
         "fat": m.user_fat or m.ai_fat or 0,
         "photo_path": m.photo_path,
         "notes": m.notes,
+        "nutrition_comment": m.nutrition_comment,
         "time": m.created_at.replace(tzinfo=timezone.utc).astimezone(SGT).isoformat() if m.created_at else None,
     } for m in meals]
 

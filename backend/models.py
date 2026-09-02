@@ -74,6 +74,7 @@ class Meal(Base):
     user_carbs = Column(Float, nullable=True)
     user_fat = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
+    nutrition_comment = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

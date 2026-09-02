@@ -37,7 +37,8 @@ async def analyze_food_photo(image_path: str) -> dict:
         "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
         '{"scan_type": "food|label|receipt", '
         '"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N'
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat — good post-workout meal, or Heavy on carbs watch portion size, or Balanced meal with good macros)"'
         '}\n\n'
         "Rules:\n"
         "- If nutrition label: read the printed serving size and per-serving numbers exactly. "
@@ -83,9 +84,10 @@ async def analyze_food_photo(image_path: str) -> dict:
                 "foods": result.get("foods", []),
                 "scan_type": result.get("scan_type", "food"),
                 "serving_size": result.get("serving_size", ""),
+                "comment": result.get("comment", ""),
             }
         except Exception as e:
-            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "error", "serving_size": "", "error": str(e)}
+            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "error", "serving_size": "", "comment": "", "error": str(e)}
 
 
 async def adjust_meal_nutrition(meal_name: str, current_calories: float, current_protein: float, current_carbs: float, current_fat: float, adjustment_text: str) -> dict:
@@ -145,10 +147,11 @@ async def analyze_food_text(food_description: str) -> dict:
         return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
 
     prompt = (
-        f"Estimate the nutrition for: '{food_description}'. "
-        "Respond ONLY with valid JSON: "
-        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N}'
+            "Estimate the nutritional content of this food photo. "
+            "Respond ONLY with valid JSON: "
+            '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
+            '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+            '"comment": "Short 1-line nutrition insight (e.g. \\"High protein, moderate fat — good post-workout meal\\" or \\"Heavy on carbs, watch portion size\\" or \\"Balanced meal with good macros\\")"}'
     )
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -178,6 +181,7 @@ async def analyze_food_text(food_description: str) -> dict:
                 "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
                 "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
                 "foods": result.get("foods", []),
+                "comment": result.get("comment", ""),
             }
         except Exception as e:
-            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "error": str(e)}
+            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": "", "error": str(e)}

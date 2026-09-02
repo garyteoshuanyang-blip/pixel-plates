@@ -274,7 +274,7 @@ async function loadMeals() {
     list.innerHTML = meals.map(m =>
       `<div class="meal-item">
         <span class="cal">${fmt(m.calories)}</span>
-        <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span></span>
+        <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>${m.nutrition_comment ? `<span class="nutrition-comment">💬 ${m.nutrition_comment}</span>` : ''}</span>
         <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
         <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${fmt(m.calories)},${fmt(m.protein)},${fmt(m.carbs)},${fmt(m.fat)})">✏️</button>
         <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
@@ -711,7 +711,7 @@ async function loadMyFoodLog() {
           <div class="cd-meal-info">
             <span class="cd-meal-name">${m.food_name || 'Unknown'}</span>
             <span class="cd-meal-cal">${fmt(m.calories)} cal</span>
-            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>
+            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>${m.nutrition_comment ? `<br><span class="nutrition-comment" style="font-size:11px">💬 ${m.nutrition_comment}</span>` : ''}
           </div>
         </div>`;
       }).join('');
@@ -816,7 +816,7 @@ async function loadClientDetail() {
           <div class="cd-meal-info">
             <span class="cd-meal-name">${m.food_name || 'Unknown'}</span>
             <span class="cd-meal-cal">${fmt(m.calories)} cal</span>
-            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>
+            <span class="cd-meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>${m.nutrition_comment ? `<br><span class="nutrition-comment" style="font-size:11px">💬 ${m.nutrition_comment}</span>` : ''}
           </div>
         </div>`;
       }).join('');
