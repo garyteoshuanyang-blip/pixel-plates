@@ -147,11 +147,12 @@ async def analyze_food_text(food_description: str) -> dict:
         return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
 
     prompt = (
-            "Estimate the nutritional content of this food photo. "
-            "Respond ONLY with valid JSON: "
+            f"Estimate the nutrition for: '{food_description}'. "
+            "Use realistic values for standard servings.\n"
+            "Respond ONLY with valid JSON:\n"
             '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
             '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
-            '"comment": "Short 1-line nutrition insight (e.g. \\"High protein, moderate fat — good post-workout meal\\" or \\"Heavy on carbs, watch portion size\\" or \\"Balanced meal with good macros\\")"}'
+            '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat or Heavy on carbs or Balanced meal with good macros)"}'
     )
 
     async with httpx.AsyncClient(timeout=15) as client:
