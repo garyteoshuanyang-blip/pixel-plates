@@ -945,10 +945,10 @@ async function aiAdjustMeal() {
     if (!resp.ok) {
       statusEl.textContent = data.detail || 'Failed to adjust';
     } else {
-      document.getElementById('edit-calories').value = data.calories;
-      document.getElementById('edit-protein').value = data.protein_g;
-      document.getElementById('edit-carbs').value = data.carbs_g;
-      document.getElementById('edit-fat').value = data.fat_g;
+      document.getElementById('edit-calories').value = fmt(data.calories);
+      document.getElementById('edit-protein').value = fmt(data.protein_g);
+      document.getElementById('edit-carbs').value = fmt(data.carbs_g);
+      document.getElementById('edit-fat').value = fmt(data.fat_g);
       document.getElementById('edit-calc-badge').style.display = 'none';
       statusEl.textContent = '✅ Adjusted! Review the numbers, then Save.';
       textEl.value = '';
