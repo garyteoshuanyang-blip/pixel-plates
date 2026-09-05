@@ -147,42 +147,67 @@ async def analyze_food_text(food_description: str) -> dict:
         return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
 
     prompt = (
-            f"Estimate the nutrition for: '{food_description}'. "
-            "Use realistic values for standard servings.\n"
-            "Respond ONLY with valid JSON:\n"
-            '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-            '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
-            '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat or Heavy on carbs or Balanced meal with good macros)"}'
+        f"Estimate the nutrition for: '{food_description}'. "
+        "Use realistic values for standard servings.\n"
+        "Rules:\n"
+        "- If you know the food, give a realistic estimate. E.g. 'chicken rice, 1 plate' ≈ 600 cal, 25g protein, 70g carbs, 15g fat.\n"
+        "- If the description includes a quantity like '1 bowl', '2 slices', 'half plate', factor that in.\n"
+        "- If unsure of the exact value, make a reasonable estimate anyway — never return 0 for a real food.\n"
+        "- Keep values realistic for a single meal portion.\n"
+        "Respond ONLY with valid JSON:\n"
+        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat or Heavy on carbs or Balanced meal with good macros)"}'
+    )
+
+    retry_prompt = (
+        f"I asked you to estimate the nutrition for: '{food_description}'. "
+        "You returned 0 for all values, which means you didn't produce a real estimate. "
+        "This is a real food - give me your best estimate using standard portion sizes. "
+        "Even an approximation is better than 0.\n"
+        "Respond ONLY with valid JSON:\n"
+        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '"comment": "Short 1-line nutrition insight"}'
     )
 
     async with httpx.AsyncClient(timeout=15) as client:
-        try:
-            resp = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "google/gemini-2.5-flash",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 300,
-                },
-            )
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            result = json.loads(content)
-            return {
-                "total_calories": _get_key(result, "total_calories", "calories", default=0),
-                "protein_g": _get_key(result, "total_protein_g", "protein_g", "protein"),
-                "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
-                "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
-                "foods": result.get("foods", []),
-                "comment": result.get("comment", ""),
-            }
-        except Exception as e:
-            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": "", "error": str(e)}
+        for attempt, current_prompt in enumerate([prompt, retry_prompt]):
+            try:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "google/gemini-2.5-flash",
+                        "messages": [{"role": "user", "content": current_prompt}],
+                        "max_tokens": 300,
+                    },
+                )
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+                result = json.loads(content)
+                cals = _get_key(result, "total_calories", "calories", default=0)
+                pro = _get_key(result, "total_protein_g", "protein_g", "protein")
+                # First attempt returned all zeros — retry with firmer prompt
+                if attempt == 0 and cals == 0 and pro == 0:
+                    continue
+                return {
+                    "total_calories": cals,
+                    "protein_g": pro,
+                    "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
+                    "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
+                    "foods": result.get("foods", []),
+                    "comment": result.get("comment", ""),
+                }
+            except Exception as e:
+                if attempt == 0:
+                    continue
+                return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": "", "error": str(e)}
+    return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": ""}
