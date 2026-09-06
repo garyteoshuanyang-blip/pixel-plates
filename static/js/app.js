@@ -259,7 +259,10 @@ async function loadOverview() {
         <span class="macro-value">${fmt(t.total_carbs)}/${fmt(t.goal_carbs)}g</span></div>` +
       `<div class="macro-row"><span class="macro-label" style="color:var(--accent2)">Fat</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fat" style="width:${Math.min(100,(t.total_fat/(t.goal_fat||1))*100)}%"></div></div>
-        <span class="macro-value">${fmt(t.total_fat)}/${fmt(t.goal_fat)}g</span></div>`;
+        <span class="macro-value">${fmt(t.total_fat)}/${fmt(t.goal_fat)}g</span></div>` +
+      `<div class="macro-row"><span class="macro-label" style="color:var(--accent)">🌿Fiber</span>
+        <div class="macro-bar-bg"><div class="macro-bar-fill fiber" style="width:${Math.min(100,(t.total_fiber||0)/(t.goal_fiber||25)*100)}%"></div></div>
+        <span class="macro-value">${fmt(t.total_fiber||0)}/${fmt(t.goal_fiber||25)}g</span></div>`;
   } catch(e) {}
 }
 
@@ -704,6 +707,7 @@ async function loadMyFoodLog() {
       const proPct = Math.min(100, (d.protein / d.goal_protein) * 100);
       const carbPct = Math.min(100, (d.carbs / d.goal_carbs) * 100);
       const fatPct = Math.min(100, (d.fat / d.goal_fat) * 100);
+      const fiberPct = Math.min(100, ((d.fiber||0) / (d.goal_fiber||25)) * 100);
       const status = d.goal_met ? '✅' : '❌';
       const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
       const mealsHtml = d.meals.map(m => {
@@ -725,6 +729,7 @@ async function loadMyFoodLog() {
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
@@ -809,6 +814,7 @@ async function loadClientDetail() {
       const proPct = Math.min(100, (d.protein / d.goal_protein) * 100);
       const carbPct = Math.min(100, (d.carbs / d.goal_carbs) * 100);
       const fatPct = Math.min(100, (d.fat / d.goal_fat) * 100);
+      const fiberPct = Math.min(100, ((d.fiber||0) / (d.goal_fiber||25)) * 100);
       const status = d.goal_met ? '✅' : '❌';
       const dateLabel = new Date(d.date + 'T00:00:00+08:00').toLocaleDateString('en-SG', { weekday: 'short', day: 'numeric', month: 'short' });
       const mealsHtml = d.meals.map(m => {
@@ -830,6 +836,7 @@ async function loadClientDetail() {
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;

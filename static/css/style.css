@@ -103,6 +103,7 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .macro-bar-fill.protein { background: var(--accent); }
 .macro-bar-fill.carbs { background: var(--gold); }
 .macro-bar-fill.fat { background: var(--accent2); }
+.macro-bar-fill.fiber { background: #66bb6a; }
 .macro-value { min-width: 60px; text-align: right; font-size: 12px; color: var(--text-dim); }
 
 /* Macro sliders */
@@ -216,6 +217,7 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .cd-bar-fill.protein { background: var(--accent); }
 .cd-bar-fill.carbs { background: var(--gold); }
 .cd-bar-fill.fat { background: var(--accent2); }
+.cd-bar-fill.fiber { background: #66bb6a; }
 .cd-macro-val { min-width: 70px; text-align: right; color: var(--text-dim); }
 
 .cd-meal { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }

@@ -58,6 +58,10 @@ def check_and_migrate():
         for col in ['points_calories', 'points_protein', 'points_carbs', 'points_fat', 'total_points']:
             if col not in daily_cols:
                 conn.execute(sql_text(f"ALTER TABLE daily_logs ADD COLUMN {col} INTEGER DEFAULT 0"))
+        if 'total_fiber' not in daily_cols:
+            conn.execute(sql_text("ALTER TABLE daily_logs ADD COLUMN total_fiber FLOAT DEFAULT 0"))
+        if 'goal_fiber' not in daily_cols:
+            conn.execute(sql_text("ALTER TABLE daily_logs ADD COLUMN goal_fiber FLOAT DEFAULT 25"))
         # Meals table
         meals_cols = [c['name'] for c in inspector.get_columns('meals')]
         if 'nutrition_comment' not in meals_cols:
@@ -310,10 +314,12 @@ async def get_client_detail(client_id: int, days: int = 7, date_str: str = None,
             "protein": log.total_protein or 0,
             "carbs": log.total_carbs or 0,
             "fat": log.total_fat or 0,
+            "fiber": log.total_fiber or 0,
             "goal_calories": log.goal_calories or 0,
             "goal_protein": log.goal_protein or 0,
             "goal_carbs": log.goal_carbs or 0,
             "goal_fat": log.goal_fat or 0,
+            "goal_fiber": log.goal_fiber or 25,
             "goal_met": log.goal_met or False,
             "meal_count": log.meal_count or 0,
             "total_points": log.total_points or 0,
@@ -968,6 +974,7 @@ async def create_meal(
             goal_protein=goal_macros["protein_g"],
             goal_carbs=goal_macros["carbs_g"],
             goal_fat=goal_macros["fat_g"],
+            goal_fiber=25,
         )
         db.add(daily)
 
@@ -975,6 +982,7 @@ async def create_meal(
     daily.total_protein = (daily.total_protein or 0) + result.get("protein_g", 0)
     daily.total_carbs = (daily.total_carbs or 0) + result.get("carbs_g", 0)
     daily.total_fat = (daily.total_fat or 0) + result.get("fat_g", 0)
+    daily.total_fiber = (daily.total_fiber or 0) + result.get("fiber_g", 0)
     daily.meal_count = (daily.meal_count or 0) + 1
     daily.goal_met = is_cal_goal_met(user.goal_type, daily.total_calories, daily.goal_calories)
 
@@ -1005,10 +1013,12 @@ async def create_meal(
         "daily_protein": daily.total_protein,
         "daily_carbs": daily.total_carbs,
         "daily_fat": daily.total_fat,
+        "daily_fiber": daily.total_fiber or 0,
         "goal": daily.goal_calories,
         "goal_protein": daily.goal_protein,
         "goal_carbs": daily.goal_carbs,
         "goal_fat": daily.goal_fat,
+        "goal_fiber": daily.goal_fiber or 25,
         "goal_met": daily.goal_met,
         "meal_count": daily.meal_count,
     }
@@ -1069,6 +1079,7 @@ async def delete_meal(meal_id: int, db: Session = Depends(get_db)):
         daily.total_protein = sum(m.user_protein or m.ai_protein or 0 for m in meals)
         daily.total_carbs = sum(m.user_carbs or m.ai_carbs or 0 for m in meals)
         daily.total_fat = sum(m.user_fat or m.ai_fat or 0 for m in meals)
+        daily.total_fiber = sum(m.user_fiber or m.ai_fiber or 0 for m in meals)
         daily.meal_count = len(meals)
         update_daily_points(daily, db)
         db.commit()
@@ -1118,6 +1129,7 @@ async def edit_meal(
         daily.total_protein = sum(m.user_protein or m.ai_protein or 0 for m in meals)
         daily.total_carbs = sum(m.user_carbs or m.ai_carbs or 0 for m in meals)
         daily.total_fat = sum(m.user_fat or m.ai_fat or 0 for m in meals)
+        daily.total_fiber = sum(m.user_fiber or m.ai_fiber or 0 for m in meals)
         daily.meal_count = len(meals)
         update_daily_points(daily, db)
         db.commit()
@@ -1229,10 +1241,12 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
             "total_protein": daily.total_protein if daily else 0,
             "total_carbs": daily.total_carbs if daily else 0,
             "total_fat": daily.total_fat if daily else 0,
+            "total_fiber": daily.total_fiber if daily else 0,
             "goal": user.daily_calorie_goal or 2000,
             "goal_protein": default_goals["protein_g"],
             "goal_carbs": default_goals["carbs_g"],
             "goal_fat": default_goals["fat_g"],
+            "goal_fiber": daily.goal_fiber if daily else 25,
             "goal_met": daily.goal_met if daily else False,
             "meal_count": daily.meal_count if daily else 0,
         },
