@@ -122,7 +122,7 @@ async def adjust_meal_nutrition(meal_name: str, current_calories: float, current
                 json={
                     "model": VISION_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 200,
+                    "max_tokens": 500,
                 },
             )
             data = resp.json()
@@ -183,7 +183,7 @@ async def analyze_food_text(food_description: str) -> dict:
                     json={
                         "model": "google/gemini-2.5-flash",
                         "messages": [{"role": "user", "content": current_prompt}],
-                        "max_tokens": 300,
+                        "max_tokens": 800,
                     },
                 )
                 data = resp.json()
