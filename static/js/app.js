@@ -272,13 +272,13 @@ async function loadMeals() {
     const list = document.getElementById('ov-meals');
     if (!meals.length) { list.innerHTML = '<p class="muted">No meals logged yet</p>'; return; }
     list.innerHTML = meals.map(m =>
-      `<div class="meal-item">
-        <span class="cal">${fmt(m.calories)}</span>
-        <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g</span>${m.nutrition_comment ? `<span class="nutrition-comment">💬 ${m.nutrition_comment}</span>` : ''}</span>
-        <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
-        <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${fmt(m.calories)},${fmt(m.protein)},${fmt(m.carbs)},${fmt(m.fat)})">✏️</button>
-        <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
-      </div>`).join('');
+          `<div class="meal-item">
+            <span class="cal">${fmt(m.calories)}</span>
+            <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g 🌿${fmt(m.fiber)}g</span>${m.nutrition_comment ? `<span class="nutrition-comment">💬 ${m.nutrition_comment}</span>` : ''}</span>
+            <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
+            <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${fmt(m.calories)},${fmt(m.protein)},${fmt(m.carbs)},${fmt(m.fat)},${fmt(m.fiber)})">✏️</button>
+            <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
+          </div>`).join('');
   } catch(e) {}
 }
 
@@ -309,7 +309,7 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
     const r = document.getElementById('meal-result');
     if (resp.ok) {
       document.getElementById('meal-result-text').innerHTML =
-        `<strong>${data.food_name}</strong>: ${fmt(data.calories)} cal · P:${fmt(data.protein)}g C:${fmt(data.carbs)}g F:${fmt(data.fat)}g<br>
+        `<strong>${data.food_name}</strong>: ${fmt(data.calories)} cal · P:${fmt(data.protein)}g C:${fmt(data.carbs)}g F:${fmt(data.fat)}g 🌿${fmt(data.fiber)}g<br>
         Daily: ${fmt(data.daily_total)}/${fmt(data.goal)} cal · P:${fmt(data.daily_protein)}/${fmt(data.goal_protein)}g`;
       r.classList.remove('hidden');
       document.getElementById('meal-photo-camera').value = ''; document.getElementById('meal-photo-gallery').value = ''; document.getElementById('meal-name').value = '';
@@ -905,7 +905,7 @@ document.addEventListener('focusin', function(e) {
   }
 });
 
-function openEditMeal(id, name, cal, pro, carbs, fat) {
+function openEditMeal(id, name, cal, pro, carbs, fat, fiber) {
   editingMealId = id;
   document.getElementById('edit-food-name').value = name || '';
   document.getElementById('edit-calories').value = fmt(cal) || 0;
@@ -949,6 +949,7 @@ async function aiAdjustMeal() {
       document.getElementById('edit-protein').value = fmt(data.protein_g);
       document.getElementById('edit-carbs').value = fmt(data.carbs_g);
       document.getElementById('edit-fat').value = fmt(data.fat_g);
+      document.getElementById('edit-fiber').value = fmt(data.fiber_g);
       document.getElementById('edit-calc-badge').style.display = 'none';
       statusEl.textContent = '✅ Adjusted! Review the numbers, then Save.';
       textEl.value = '';

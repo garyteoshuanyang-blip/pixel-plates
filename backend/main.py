@@ -62,6 +62,10 @@ def check_and_migrate():
         meals_cols = [c['name'] for c in inspector.get_columns('meals')]
         if 'nutrition_comment' not in meals_cols:
             conn.execute(sql_text("ALTER TABLE meals ADD COLUMN nutrition_comment VARCHAR"))
+        if 'ai_fiber' not in meals_cols:
+            conn.execute(sql_text("ALTER TABLE meals ADD COLUMN ai_fiber FLOAT"))
+        if 'user_fiber' not in meals_cols:
+            conn.execute(sql_text("ALTER TABLE meals ADD COLUMN user_fiber FLOAT"))
     # Auto-promote designated trainer email
     trainer_email = os.getenv("TRAINER_EMAIL", "")
     if trainer_email:
@@ -941,6 +945,7 @@ async def create_meal(
         ai_protein=result.get("protein_g", 0),
         ai_carbs=result.get("carbs_g", 0),
         ai_fat=result.get("fat_g", 0),
+        ai_fiber=result.get("fiber_g", 0),
         user_calories=calories,
         notes=notes,
         nutrition_comment=result.get("comment", ""),
@@ -993,6 +998,7 @@ async def create_meal(
         "protein": result.get("protein_g", 0),
         "carbs": result.get("carbs_g", 0),
         "fat": result.get("fat_g", 0),
+        "fiber": result.get("fiber_g", 0),
         "ai_calories": ai_calories,
         "nutrition_comment": result.get("comment", ""),
         "daily_total": daily.total_calories,
@@ -1032,6 +1038,7 @@ async def get_meals(user_id: int, date_str: str = None, db: Session = Depends(ge
         "protein": m.user_protein or m.ai_protein or 0,
         "carbs": m.user_carbs or m.ai_carbs or 0,
         "fat": m.user_fat or m.ai_fat or 0,
+        "fiber": m.user_fiber or m.ai_fiber or 0,
         "photo_path": m.photo_path,
         "notes": m.notes,
         "nutrition_comment": m.nutrition_comment,
@@ -1143,9 +1150,10 @@ async def ai_adjust_meal(meal_id: int, adjustment_text: str = Form(...), db: Ses
     current_pro = meal.user_protein or meal.ai_protein or 0
     current_carb = meal.user_carbs or meal.ai_carbs or 0
     current_fat = meal.user_fat or meal.ai_fat or 0
+    current_fiber = meal.user_fiber or meal.ai_fiber or 0
 
     result = await adjust_meal_nutrition(
-        current_name, current_cal, current_pro, current_carb, current_fat, adjustment_text
+        current_name, current_cal, current_pro, current_carb, current_fat, current_fiber, adjustment_text
     )
 
     return {
@@ -1153,6 +1161,7 @@ async def ai_adjust_meal(meal_id: int, adjustment_text: str = Form(...), db: Ses
         "protein_g": result.get("protein_g", current_pro),
         "carbs_g": result.get("carbs_g", current_carb),
         "fat_g": result.get("fat_g", current_fat),
+        "fiber_g": result.get("fiber_g", current_fiber),
     }
 
 

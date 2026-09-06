@@ -24,7 +24,7 @@ async def analyze_food_photo(image_path: str) -> dict:
     - Receipt / order list: list food items + estimate macros
     """
     if not OPENROUTER_API_KEY:
-        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "unknown"}
+        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": [], "scan_type": "unknown"}
 
     with open(image_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -36,8 +36,8 @@ async def analyze_food_photo(image_path: str) -> dict:
         "3. A RECEIPT or FOOD ORDER LIST — list every food item with estimated macros\n\n"
         "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
         '{"scan_type": "food|label|receipt", '
-        '"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N, "fiber_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, "total_fiber_g": N, '
         '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat — good post-workout meal, or Heavy on carbs watch portion size, or Balanced meal with good macros)"'
         '}\n\n'
         "Rules:\n"
@@ -81,33 +81,35 @@ async def analyze_food_photo(image_path: str) -> dict:
                 "protein_g": _get_key(result, "total_protein_g", "protein_g", "protein"),
                 "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
                 "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
+                "fiber_g": _get_key(result, "total_fiber_g", "fiber_g", "fiber", default=0),
                 "foods": result.get("foods", []),
                 "scan_type": result.get("scan_type", "food"),
                 "serving_size": result.get("serving_size", ""),
                 "comment": result.get("comment", ""),
             }
         except Exception as e:
-            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "scan_type": "error", "serving_size": "", "comment": "", "error": str(e)}
+            return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": [], "scan_type": "error", "serving_size": "", "comment": "", "error": str(e)}
 
 
-async def adjust_meal_nutrition(meal_name: str, current_calories: float, current_protein: float, current_carbs: float, current_fat: float, adjustment_text: str) -> dict:
+async def adjust_meal_nutrition(meal_name: str, current_calories: float, current_protein: float, current_carbs: float, current_fat: float, current_fiber: float, adjustment_text: str) -> dict:
     """Use AI to adjust meal nutrition based on user's natural language edit.
     e.g. 'I didn't eat the rice', 'the portion was smaller', 'I added extra egg'.
     Returns adjusted values that the user can review before saving.
     """
     if not OPENROUTER_API_KEY:
-        return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat}
+        return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat, "fiber_g": current_fiber}
 
     prompt = (
         f"A meal was logged as '{meal_name}' with these estimated values:\n"
         f"- Calories: {current_calories}\n"
         f"- Protein: {current_protein}g\n"
         f"- Carbs: {current_carbs}g\n"
-        f"- Fat: {current_fat}g\n\n"
+        f"- Fat: {current_fat}g\n"
+        f"- Fiber: {current_fiber}g\n\n"
         f"The user says: \"{adjustment_text}\"\n\n"
         "Adjust the nutrition based on what the user described. "
         "Respond ONLY with valid JSON (no markdown, no code blocks):\n"
-        '{"calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}\n'
+        '{"calories": N, "protein_g": N, "carbs_g": N, "fat_g": N, "fiber_g": N}\n'
         "Keep values realistic for a single meal. If unsure, make a reasonable estimate."
     )
 
@@ -137,14 +139,15 @@ async def adjust_meal_nutrition(meal_name: str, current_calories: float, current
                 "protein_g": _get_key(result, "protein_g", "protein", default=current_protein),
                 "carbs_g": _get_key(result, "carbs_g", "carbs", default=current_carbs),
                 "fat_g": _get_key(result, "fat_g", "fat", default=current_fat),
+                "fiber_g": _get_key(result, "fiber_g", "fiber", default=current_fiber),
             }
         except Exception as e:
-            return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat, "error": str(e)}
+            return {"calories": current_calories, "protein_g": current_protein, "carbs_g": current_carbs, "fat_g": current_fat, "fiber_g": current_fiber, "error": str(e)}
 
 
 async def analyze_food_text(food_description: str) -> dict:
     if not OPENROUTER_API_KEY:
-        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": []}
+        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": []}
 
     prompt = (
         f"Estimate the nutrition for: '{food_description}'. "
@@ -155,8 +158,8 @@ async def analyze_food_text(food_description: str) -> dict:
         "- If unsure of the exact value, make a reasonable estimate anyway — never return 0 for a real food.\n"
         "- Keep values realistic for a single meal portion.\n"
         "Respond ONLY with valid JSON:\n"
-        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N, "fiber_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, "total_fiber_g": N, '
         '"comment": "Short 1-line nutrition insight (e.g. High protein, moderate fat or Heavy on carbs or Balanced meal with good macros)"}'
     )
 
@@ -166,8 +169,8 @@ async def analyze_food_text(food_description: str) -> dict:
         "This is a real food - give me your best estimate using standard portion sizes. "
         "Even an approximation is better than 0.\n"
         "Respond ONLY with valid JSON:\n"
-        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N}], '
-        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, '
+        '{"foods": [{"name": "...", "calories": N, "protein_g": N, "carbs_g": N, "fat_g": N, "fiber_g": N}], '
+        '"total_calories": N, "total_protein_g": N, "total_carbs_g": N, "total_fat_g": N, "total_fiber_g": N, '
         '"comment": "Short 1-line nutrition insight"}'
     )
 
@@ -203,11 +206,12 @@ async def analyze_food_text(food_description: str) -> dict:
                     "protein_g": pro,
                     "carbs_g": _get_key(result, "total_carbs_g", "carbs_g", "carbs"),
                     "fat_g": _get_key(result, "total_fat_g", "fat_g", "fat"),
+                    "fiber_g": _get_key(result, "total_fiber_g", "fiber_g", "fiber", default=0),
                     "foods": result.get("foods", []),
                     "comment": result.get("comment", ""),
                 }
             except Exception as e:
                 if attempt == 0:
                     continue
-                return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": "", "error": str(e)}
-    return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "foods": [], "comment": ""}
+                return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": [], "comment": "", "error": str(e)}
+    return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": [], "comment": ""}
