@@ -260,7 +260,7 @@ async function loadOverview() {
       `<div class="macro-row"><span class="macro-label" style="color:var(--accent2)">Fat</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fat" style="width:${Math.min(100,(t.total_fat/(t.goal_fat||1))*100)}%"></div></div>
         <span class="macro-value">${fmt(t.total_fat)}/${fmt(t.goal_fat)}g</span></div>` +
-      `<div class="macro-row"><span class="macro-label" style="color:var(--accent)">Fiber</span>
+      `<div class="macro-row"><span class="macro-label" style="color:#66bb6a">Fiber</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fiber" style="width:${Math.min(100,(t.total_fiber||0)/(t.goal_fiber||25)*100)}%"></div></div>
         <span class="macro-value">${fmt(t.total_fiber||0)}/${fmt(t.goal_fiber||25)}g</span></div>`;
   } catch(e) {}
@@ -729,7 +729,7 @@ async function loadMyFoodLog() {
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:#66bb6a">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
@@ -836,7 +836,7 @@ async function loadClientDetail() {
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">P</span><div class="cd-bar-bg"><div class="cd-bar-fill protein" style="width:${proPct}%"></div></div><span class="cd-macro-val">${fmt(d.protein)}/${fmt(d.goal_protein)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--gold)">C</span><div class="cd-bar-bg"><div class="cd-bar-fill carbs" style="width:${carbPct}%"></div></div><span class="cd-macro-val">${fmt(d.carbs)}/${fmt(d.goal_carbs)}g</span></div>
           <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent2)">F</span><div class="cd-bar-bg"><div class="cd-bar-fill fat" style="width:${fatPct}%"></div></div><span class="cd-macro-val">${fmt(d.fat)}/${fmt(d.goal_fat)}g</span></div>
-          <div class="cd-macro-row"><span class="cd-macro-label" style="color:var(--accent)">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
+          <div class="cd-macro-row"><span class="cd-macro-label" style="color:#66bb6a">🌿</span><div class="cd-bar-bg"><div class="cd-bar-fill fiber" style="width:${fiberPct}%"></div></div><span class="cd-macro-val">${fmt(d.fiber||0)}/${fmt(d.goal_fiber||25)}g</span></div>
         </div>
         ${d.meals.length ? mealsHtml : '<p class="muted" style="padding:4px 0">No meals logged</p>'}
       </div>`;
