@@ -260,7 +260,7 @@ async function loadOverview() {
       `<div class="macro-row"><span class="macro-label" style="color:var(--accent2)">Fat</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fat" style="width:${Math.min(100,(t.total_fat/(t.goal_fat||1))*100)}%"></div></div>
         <span class="macro-value">${fmt(t.total_fat)}/${fmt(t.goal_fat)}g</span></div>` +
-      `<div class="macro-row"><span class="macro-label" style="color:var(--accent)">🌿Fiber</span>
+      `<div class="macro-row"><span class="macro-label" style="color:var(--accent)">Fiber</span>
         <div class="macro-bar-bg"><div class="macro-bar-fill fiber" style="width:${Math.min(100,(t.total_fiber||0)/(t.goal_fiber||25)*100)}%"></div></div>
         <span class="macro-value">${fmt(t.total_fiber||0)}/${fmt(t.goal_fiber||25)}g</span></div>`;
   } catch(e) {}
