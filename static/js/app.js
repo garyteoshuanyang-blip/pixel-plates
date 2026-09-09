@@ -443,7 +443,30 @@ function updatePhotoPreview() {
   const gal = document.getElementById('meal-photo-gallery').files[0];
   const f = cam || gal;
   document.getElementById('photo-preview').textContent = f ? '📸 ' + f.name : '';
+  // Convert HEIC/large images to JPEG on selection
+  if (f && !cam) {
+    convertToJPEG(f);
+  }
 }
+
+async function convertToJPEG(file) {
+  // Skip if already JPEG
+  if (file.type === 'image/jpeg') return;
+  const img = await createImageBitmap(file);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.min(img.width, 1920);
+  canvas.height = Math.round(canvas.width * (img.height / img.width));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  if (!blob) return;
+  // Replace the gallery file with the converted JPEG
+  const jpegFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+  const dt = new DataTransfer();
+  dt.items.add(jpegFile);
+  document.getElementById('meal-photo-gallery').files = dt.files;
+}
+
 document.getElementById('meal-photo-camera').addEventListener('change', updatePhotoPreview);
 document.getElementById('meal-photo-gallery').addEventListener('change', updatePhotoPreview);
 
