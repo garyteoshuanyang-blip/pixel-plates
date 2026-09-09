@@ -1131,7 +1131,7 @@ async def create_meal(
         ai_fiber=db_food.fiber_g if db_food else result.get("fiber_g", 0),
         user_calories=calories,
         notes=notes,
-        nutrition_comment=db_food.is_verified and "From food database ✓" or result.get("comment", ""),
+        nutrition_comment=db_food and db_food.is_verified and "From food database ✓" or result.get("comment", ""),
     )
     db.add(meal)
 
