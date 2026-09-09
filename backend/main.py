@@ -145,6 +145,17 @@ def check_and_migrate():
             conn.execute(sql_text("CREATE INDEX idx_food_items_name ON food_items (name)"))
         print("✅ Created food_items table")
 
+    # Seed food items if table is empty
+    try:
+        with engine.begin() as conn_seed:
+            count = conn_seed.execute(sql_text("SELECT COUNT(*) FROM food_items")).scalar()
+            if count == 0:
+                from backend.seed_food import seed as seed_food
+                seed_food()
+                print("✅ Food database seeded")
+    except Exception as e:
+        print(f"⚠️ Food seed check skipped: {e}")
+
 
 @app.on_event("startup")
 async def startup():
