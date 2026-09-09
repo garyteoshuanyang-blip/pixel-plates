@@ -168,7 +168,10 @@
           </div>
           <div id="photo-preview" style="text-align:center;font-size:12px;color:var(--text-dim);margin-top:4px"></div>
           <div class="or-divider">— or type —</div>
-          <input type="text" id="meal-name" placeholder="e.g. Chicken rice, 1 plate">
+          <div id="food-search-wrapper" style="position:relative">
+            <input type="text" id="meal-name" placeholder="e.g. Chicken rice, 1 plate" autocomplete="off">
+            <div id="food-suggestions" class="food-suggestions" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:100;max-height:250px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15)"></div>
+          </div>
           <button type="submit" class="btn">➕ Log Meal</button>
         </form>
         <div id="meal-result" class="hidden result-card"><p id="meal-result-text"></p></div>
@@ -207,7 +210,11 @@
           <label>Fiber (g) <span style="font-size:11px;color:var(--muted)">🌿</span></label>
           <input type="number" id="edit-fiber" step="0.1" readonly style="background:var(--bg);color:var(--text-dim)" oninput="autoCalcCalories()">
           <button type="submit" class="btn">💾 Save</button>
-          <button type="button" class="btn" style="background:var(--accent);margin-top:6px" onclick="closeEditMeal()">Cancel</button>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button type="button" id="save-to-food-db-btn" class="btn" style="flex:1;font-size:12px;background:var(--accent2)" onclick="saveToFoodDB()">📚 Save to Food Library</button>
+            <button type="button" class="btn" style="flex:1;font-size:12px;background:var(--accent)" onclick="closeEditMeal()">Cancel</button>
+          </div>
+          <p id="edit-save-status" class="goal-label" style="margin-top:4px"></p>
         </form>
         <p id="edit-error" class="error"></p>
       </div>

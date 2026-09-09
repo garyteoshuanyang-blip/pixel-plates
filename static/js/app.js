@@ -289,6 +289,80 @@ async function deleteMeal(id) {
   try { await fetch(API + '/api/meals/' + id, { method: 'DELETE' }); loadMeals(); loadOverview(); } catch(e) {}
 }
 
+// === FOOD SEARCH ===
+let _foodSearchTimeout = null;
+document.getElementById('meal-name').addEventListener('input', () => {
+  const q = document.getElementById('meal-name').value.trim();
+  const suggestions = document.getElementById('food-suggestions');
+  if (q.length < 1) { suggestions.style.display = 'none'; return; }
+  clearTimeout(_foodSearchTimeout);
+  _foodSearchTimeout = setTimeout(async () => {
+    try {
+      const resp = await fetch(API + '/api/food?q=' + encodeURIComponent(q) + '&limit=8');
+      const data = await resp.json();
+      if (data.results && data.results.length > 0) {
+        suggestions.innerHTML = data.results.map(item => `
+          <div class="food-suggestion" data-id="${item.id}" onclick="selectFoodSuggestion(this)"
+               style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:500">${item.name}</div>
+              <div style="font-size:11px;color:var(--text-dim)">${item.serving} · ${item.calories} cal · P:${item.protein_g}g C:${item.carbs_g}g F:${item.fat_g}g</div>
+            </div>
+            ${item.is_verified ? '<span style="font-size:10px;color:var(--accent2);background:var(--accent2)20;padding:2px 6px;border-radius:4px">✓</span>' : ''}
+          </div>
+        `).join('');
+        suggestions.style.display = 'block';
+      } else {
+        suggestions.style.display = 'none';
+      }
+    } catch(e) { suggestions.style.display = 'none'; }
+  }, 200);
+});
+
+document.getElementById('meal-name').addEventListener('blur', () => {
+  setTimeout(() => document.getElementById('food-suggestions').style.display = 'none', 200);
+});
+
+document.getElementById('meal-name').addEventListener('focus', () => {
+  const s = document.getElementById('food-suggestions');
+  if (s.children.length > 0) s.style.display = 'block';
+});
+
+let _selectedFoodId = null;
+
+function selectFoodSuggestion(el) {
+  _selectedFoodId = el.dataset.id;
+  const name = el.querySelector('div div:first-child').textContent.trim();
+  document.getElementById('meal-name').value = name;
+  document.getElementById('food-suggestions').style.display = 'none';
+  // Bump popularity
+  fetch(API + '/api/food/bump/' + _selectedFoodId, { method: 'POST' }).catch(() => {});
+}
+
+// === SAVE MEAL TO FOOD DB ===
+async function saveToFoodDB() {
+  if (!editingMealId) return;
+  const btn = document.getElementById('save-to-food-db-btn');
+  const statusEl = document.getElementById('edit-save-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving...';
+  statusEl.textContent = '';
+  try {
+    const resp = await fetch(API + '/api/food/from-meal/' + editingMealId, { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok) {
+      statusEl.textContent = data.existing ? '✅ Already in library (popularity bumped!)' : '✅ Saved to food library!';
+      statusEl.style.color = 'var(--green)';
+    } else {
+      statusEl.textContent = data.detail || data.error || 'Failed to save';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Connection error';
+  }
+  btn.disabled = false;
+  btn.textContent = '📚 Save to Food Library';
+}
+
 // === MEAL FORM ===
 document.getElementById('meal-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -303,6 +377,7 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
   }
   if (photo) form.append('photo', photo);
   else form.append('food_name', foodName);
+  if (_selectedFoodId) form.append('food_db_id', _selectedFoodId);
 
   document.querySelector('#meal-form .btn').textContent = '⏳...';
   document.querySelector('#meal-form .btn').disabled = true;
@@ -316,6 +391,7 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
         Daily: ${fmt(data.daily_total)}/${fmt(data.goal)} cal · P:${fmt(data.daily_protein)}/${fmt(data.goal_protein)}g`;
       r.classList.remove('hidden');
       document.getElementById('meal-photo-camera').value = ''; document.getElementById('meal-photo-gallery').value = ''; document.getElementById('meal-name').value = '';
+      _selectedFoodId = null;
       document.getElementById('photo-preview').textContent = '';
       loadMeals(); loadOverview(); checkStreak();
     } else { document.getElementById('meal-result-text').textContent = data.detail || 'Error'; r.classList.remove('hidden'); }

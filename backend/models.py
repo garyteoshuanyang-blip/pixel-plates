@@ -143,6 +143,25 @@ class Pet(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class FoodItem(Base):
+    __tablename__ = "food_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True)
+    name_zh = Column(String, nullable=True)
+    category = Column(String, nullable=True)  # rice, noodle, protein, veg, drink, snack, indian, breakfast
+    serving = Column(String, default="1 serving")
+    calories = Column(Float, default=0)
+    protein_g = Column(Float, default=0)
+    carbs_g = Column(Float, default=0)
+    fat_g = Column(Float, default=0)
+    fiber_g = Column(Float, default=0)
+    is_verified = Column(Boolean, default=False)
+    source = Column(String, default="user")  # hpb, ai, user
+    times_logged = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
 
 

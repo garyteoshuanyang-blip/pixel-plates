@@ -16,7 +16,7 @@ import sys
 import subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory, Pet
+from backend.models import SessionLocal, User, Meal, DailyLog, ShopItem, Inventory, Pet, FoodItem
 from backend.services import tdee as tdee_service
 from backend.services.vision import analyze_food_photo, analyze_food_text, adjust_meal_nutrition
 
@@ -118,6 +118,32 @@ def check_and_migrate():
                 print("✅ Added last_xp_checkpoint to pets table")
         except Exception as e:
             print(f"⚠️ Pets migration skipped: {e}")
+
+    # FoodItems table
+    tables = inspector.get_table_names()
+    if 'food_items' not in tables:
+        with engine.begin() as conn:
+            from sqlalchemy import text as sql_text
+            conn.execute(sql_text("""
+                CREATE TABLE food_items (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR NOT NULL,
+                    name_zh VARCHAR,
+                    category VARCHAR,
+                    serving VARCHAR DEFAULT '1 serving',
+                    calories FLOAT DEFAULT 0,
+                    protein_g FLOAT DEFAULT 0,
+                    carbs_g FLOAT DEFAULT 0,
+                    fat_g FLOAT DEFAULT 0,
+                    fiber_g FLOAT DEFAULT 0,
+                    is_verified BOOLEAN DEFAULT FALSE,
+                    source VARCHAR DEFAULT 'user',
+                    times_logged INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.execute(sql_text("CREATE INDEX idx_food_items_name ON food_items (name)"))
+        print("✅ Created food_items table")
 
 
 @app.on_event("startup")
@@ -472,6 +498,101 @@ async def get_my_rank(user_id: int, period: str = "daily", db: Session = Depends
         "days_logged": int(my_row.days_logged or 0) if my_row else 0,
         "name": user.name if user else "",
     }
+
+
+# === Food Database ===
+
+
+@app.get("/api/food")
+async def search_food(q: str = "", limit: int = 10, db: Session = Depends(get_db)):
+    """Search food database by name. Returns matching items sorted by popularity."""
+    if not q.strip():
+        # Return popular items
+        items = db.query(FoodItem).order_by(FoodItem.times_logged.desc()).limit(limit).all()
+    else:
+        query = q.strip().lower()
+        items = db.query(FoodItem).filter(
+            func.lower(FoodItem.name).contains(query)
+        ).order_by(FoodItem.times_logged.desc()).limit(limit).all()
+    return {
+        "results": [{
+            "id": i.id,
+            "name": i.name,
+            "name_zh": i.name_zh,
+            "category": i.category,
+            "serving": i.serving,
+            "calories": i.calories,
+            "protein_g": i.protein_g,
+            "carbs_g": i.carbs_g,
+            "fat_g": i.fat_g,
+            "fiber_g": i.fiber_g,
+            "is_verified": i.is_verified,
+            "times_logged": i.times_logged,
+        } for i in items],
+    }
+
+
+@app.post("/api/food")
+async def add_food(name: str = Form(...), serving: str = Form("1 serving"),
+                   calories: float = Form(0), protein_g: float = Form(0),
+                   carbs_g: float = Form(0), fat_g: float = Form(0),
+                   fiber_g: float = Form(0), category: str = Form(None),
+                   name_zh: str = Form(None), db: Session = Depends(get_db)):
+    """Add a new food item (user-suggested or quick-add)."""
+    existing = db.query(FoodItem).filter(func.lower(FoodItem.name) == name.lower().strip()).first()
+    if existing:
+        return {"ok": False, "error": "Already exists", "id": existing.id}
+    item = FoodItem(
+        name=name.strip(), name_zh=name_zh, serving=serving,
+        category=category, calories=calories, protein_g=protein_g,
+        carbs_g=carbs_g, fat_g=fat_g, fiber_g=fiber_g,
+        source="user", is_verified=False,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return {"ok": True, "id": item.id, "name": item.name}
+
+
+@app.post("/api/food/from-meal/{meal_id}")
+async def save_meal_to_food_db(meal_id: int, db: Session = Depends(get_db)):
+    """Save an AI-estimated meal as a food DB entry (teaches the app)."""
+    meal = db.query(Meal).filter(Meal.id == meal_id).first()
+    if not meal:
+        raise HTTPException(404, "Meal not found")
+    if not meal.food_name:
+        raise HTTPException(400, "Meal has no food name")
+    name = meal.food_name.strip()
+    existing = db.query(FoodItem).filter(func.lower(FoodItem.name) == name.lower()).first()
+    if existing:
+        existing.times_logged = (existing.times_logged or 0) + 1
+        db.commit()
+        return {"ok": True, "id": existing.id, "existing": True}
+    cal = meal.user_calories or meal.ai_calories or 0
+    pro = meal.user_protein or meal.ai_protein or 0
+    carb = meal.user_carbs or meal.ai_carbs or 0
+    fat = meal.user_fat or meal.ai_fat or 0
+    fib = meal.user_fiber or meal.ai_fiber or 0
+    item = FoodItem(
+        name=name, serving="1 serving",
+        calories=cal, protein_g=pro, carbs_g=carb, fat_g=fat, fiber_g=fib,
+        source="ai", is_verified=False, times_logged=1,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return {"ok": True, "id": item.id, "existing": False}
+
+
+@app.post("/api/food/bump/{food_id}")
+async def bump_food_popularity(food_id: int, db: Session = Depends(get_db)):
+    """Increment times_logged when a user selects a food item."""
+    item = db.query(FoodItem).filter(FoodItem.id == food_id).first()
+    if not item:
+        raise HTTPException(404, "Food not found")
+    item.times_logged = (item.times_logged or 0) + 1
+    db.commit()
+    return {"ok": True, "times_logged": item.times_logged}
 
 
 # === Achievements ===
@@ -908,6 +1029,11 @@ async def create_meal(
     photo: UploadFile = File(None),
     food_name: str = Form(None),
     calories: float = Form(None),
+    protein: float = Form(None),
+    carbs: float = Form(None),
+    fat: float = Form(None),
+    fiber: float = Form(None),
+    food_db_id: int = Form(None),
     notes: str = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -937,24 +1063,33 @@ async def create_meal(
         result = await analyze_food_text(food_name)
         ai_calories = result.get("total_calories", 0)
 
+    # If a food_db_id was provided, look up DB values and override AI
+    db_food = None
+    if food_db_id:
+        db_food = db.query(FoodItem).filter(FoodItem.id == food_db_id).first()
+        if db_food:
+            result = {}
+            ai_calories = db_food.calories
+            # Also bump popularity
+
     if not photo and not food_name:
         raise HTTPException(400, "Either a photo or food name is required")
 
-    # Use AI estimate or user-provided value
-    final_calories = calories if calories is not None else ai_calories
+    # Use AI estimate or user-provided value or DB lookup
+    final_calories = calories if calories is not None else (db_food.calories if db_food else ai_calories)
 
     meal = Meal(
         user_id=user_id,
         photo_path=photo_path,
-        food_name=food_name or (result.get("foods", [{}])[0].get("name", "Unknown") if photo_path else food_name),
+        food_name=db_food.name if db_food else (food_name or (result.get("foods", [{}])[0].get("name", "Unknown") if photo_path else food_name)),
         ai_calories=ai_calories,
-        ai_protein=result.get("protein_g", 0),
-        ai_carbs=result.get("carbs_g", 0),
-        ai_fat=result.get("fat_g", 0),
-        ai_fiber=result.get("fiber_g", 0),
+        ai_protein=db_food.protein_g if db_food else result.get("protein_g", 0),
+        ai_carbs=db_food.carbs_g if db_food else result.get("carbs_g", 0),
+        ai_fat=db_food.fat_g if db_food else result.get("fat_g", 0),
+        ai_fiber=db_food.fiber_g if db_food else result.get("fiber_g", 0),
         user_calories=calories,
         notes=notes,
-        nutrition_comment=result.get("comment", ""),
+        nutrition_comment=db_food.is_verified and "From food database ✓" or result.get("comment", ""),
     )
     db.add(meal)
 
