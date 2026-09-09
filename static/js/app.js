@@ -344,15 +344,53 @@ async function saveToFoodDB() {
   if (!editingMealId) return;
   const btn = document.getElementById('save-to-food-db-btn');
   const statusEl = document.getElementById('edit-save-status');
+
+  // Check if we're in a variant-conflict retry
+  const variantInput = document.getElementById('save-variant-input');
+  const variant = variantInput ? variantInput.value.trim() : '';
+
   btn.disabled = true;
   btn.textContent = '⏳ Saving...';
   statusEl.textContent = '';
+
   try {
-    const resp = await fetch(API + '/api/food/from-meal/' + editingMealId, { method: 'POST' });
+    const f = new FormData();
+    if (variant) f.append('variant_name', variant);
+
+    const resp = await fetch(API + '/api/food/from-meal/' + editingMealId, { method: 'POST', body: f });
     const data = await resp.json();
-    if (resp.ok) {
-      statusEl.textContent = data.existing ? '✅ Already in library (popularity bumped!)' : '✅ Saved to food library!';
+
+    if (resp.ok && data.ok !== false) {
+      if (data.existing) {
+        statusEl.textContent = '✅ Already in library (popularity bumped!)';
+      } else {
+        statusEl.textContent = '✅ Saved to food library!';
+      }
       statusEl.style.color = 'var(--green)';
+      // Remove variant prompt if it was shown
+      const promptEl = document.getElementById('save-variant-prompt');
+      if (promptEl) promptEl.remove();
+    } else if (data.name_conflict) {
+      // Show variant naming prompt
+      statusEl.textContent = '';
+      let promptEl = document.getElementById('save-variant-prompt');
+      if (!promptEl) {
+        promptEl = document.createElement('div');
+        promptEl.id = 'save-variant-prompt';
+        promptEl.style.marginTop = '8px';
+        promptEl.style.padding = '10px';
+        promptEl.style.background = 'var(--bg-card)';
+        promptEl.style.border = '1px solid var(--border)';
+        promptEl.style.borderRadius = '8px';
+        promptEl.innerHTML = `
+          <p style="font-size:12px;font-weight:600;margin-bottom:6px">📝 <strong>"${data.existing_name}"</strong> already exists (${data.existing_calories} cal)</p>
+          <p style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Your version has ${data.meal_calories} cal — save as a variant?</p>
+          <input type="text" id="save-variant-input" placeholder="e.g. Bak Chor Mee (Less Noodles)" style="width:100%;padding:6px 8px;border:1px solid var(--accent);border-radius:4px;font-size:12px;margin-bottom:6px">
+          <button onclick="saveToFoodDB()" class="btn" style="font-size:12px;padding:6px 10px;width:100%">💾 Save Variant</button>
+        `;
+        document.getElementById('edit-modal').appendChild(promptEl);
+        document.getElementById('save-variant-input').focus();
+      }
     } else {
       statusEl.textContent = data.detail || data.error || 'Failed to save';
     }
@@ -1005,6 +1043,8 @@ function closeEditMeal() {
   document.getElementById('edit-modal').classList.add('hidden');
   editingMealId = null;
   document.getElementById('ai-adjust-status').textContent = '';
+  const promptEl = document.getElementById('save-variant-prompt');
+  if (promptEl) promptEl.remove();
 }
 
 async function aiAdjustMeal() {

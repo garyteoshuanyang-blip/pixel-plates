@@ -566,28 +566,59 @@ async def add_food(name: str = Form(...), serving: str = Form("1 serving"),
 
 
 @app.post("/api/food/from-meal/{meal_id}")
-async def save_meal_to_food_db(meal_id: int, db: Session = Depends(get_db)):
-    """Save an AI-estimated meal as a food DB entry (teaches the app)."""
+async def save_meal_to_food_db(meal_id: int, variant_name: str = Form(None), db: Session = Depends(get_db)):
+    """Save an AI-estimated meal as a food DB entry (teaches the app).
+    If a food with the same name already exists and no variant_name is given,
+    returns name_conflict so the frontend can prompt the user to create a variant.
+    Pass variant_name to create a new entry with that name.
+    """
     meal = db.query(Meal).filter(Meal.id == meal_id).first()
     if not meal:
         raise HTTPException(404, "Meal not found")
     if not meal.food_name:
         raise HTTPException(400, "Meal has no food name")
     name = meal.food_name.strip()
-    existing = db.query(FoodItem).filter(func.lower(FoodItem.name) == name.lower()).first()
+
+    # If variant_name is provided, use it instead of the original name
+    final_name = variant_name.strip() if variant_name else name
+
+    existing = db.query(FoodItem).filter(func.lower(FoodItem.name) == final_name.lower()).first()
     if existing:
         existing.times_logged = (existing.times_logged or 0) + 1
         db.commit()
         return {"ok": True, "id": existing.id, "existing": True}
+
+    # If no variant_name and name already exists → signal conflict
+    if not variant_name:
+        existing_original = db.query(FoodItem).filter(func.lower(FoodItem.name) == name.lower()).first()
+        if existing_original:
+            # Return the meal's current values so the frontend can offer them for the variant
+            cal = meal.user_calories or meal.ai_calories or 0
+            pro = meal.user_protein or meal.ai_protein or 0
+            carb = meal.user_carbs or meal.ai_carbs or 0
+            fat = meal.user_fat or meal.ai_fat or 0
+            fib = meal.user_fiber or meal.ai_fiber or 0
+            return {
+                "ok": False,
+                "name_conflict": True,
+                "existing_name": existing_original.name,
+                "existing_calories": existing_original.calories,
+                "meal_calories": cal,
+                "meal_protein_g": pro,
+                "meal_carbs_g": carb,
+                "meal_fat_g": fat,
+                "meal_fiber_g": fib,
+            }
+
     cal = meal.user_calories or meal.ai_calories or 0
     pro = meal.user_protein or meal.ai_protein or 0
     carb = meal.user_carbs or meal.ai_carbs or 0
     fat = meal.user_fat or meal.ai_fat or 0
     fib = meal.user_fiber or meal.ai_fiber or 0
     item = FoodItem(
-        name=name, serving="1 serving",
+        name=final_name, serving="1 serving",
         calories=cal, protein_g=pro, carbs_g=carb, fat_g=fat, fiber_g=fib,
-        source="ai", is_verified=False, times_logged=1,
+        source="ai" if not variant_name else "user", is_verified=False, times_logged=1,
     )
     db.add(item)
     db.commit()
