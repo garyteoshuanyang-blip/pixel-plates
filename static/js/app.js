@@ -402,44 +402,18 @@ async function saveToFoodDB() {
 }
 
 // === MEAL FORM ===
-async function compressImage(file) {
-  // Only compress if it's a large image (>1.5MB or not JPEG)
-  if (file.size < 1.5 * 1024 * 1024 && file.type === 'image/jpeg') return file;
-  try {
-    const img = await createImageBitmap(file);
-    const canvas = document.createElement('canvas');
-    const maxDim = 1200;
-    let w = img.width, h = img.height;
-    if (w > maxDim || h > maxDim) {
-      if (w > h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
-      else { w = Math.round(w * (maxDim / h)); h = maxDim; }
-    } else { w = img.width; h = img.height; }
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, w, h);
-    return await new Promise(resolve => canvas.toBlob(blob => {
-      if (!blob) return resolve(file);
-      resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.8));
-  } catch(e) { return file; }
-}
-
 document.getElementById('meal-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData();
   form.append('user_id', currentUser.user_id);
-  let photo = document.getElementById('meal-photo-camera').files[0] || document.getElementById('meal-photo-gallery').files[0];
+  const photo = document.getElementById('meal-photo-camera').files[0] || document.getElementById('meal-photo-gallery').files[0];
   const foodName = document.getElementById('meal-name').value;
   if (!photo && !foodName) { 
     document.getElementById('meal-result-text').textContent = 'Take a photo or type a food';
     document.getElementById('meal-result').classList.remove('hidden');
     return;
   }
-  if (photo) {
-    // Compress before upload to avoid proxy size limits
-    photo = await compressImage(photo);
-    form.append('photo', photo);
-  }
+  if (photo) form.append('photo', photo);
   else form.append('food_name', foodName);
   if (_selectedFoodId) form.append('food_db_id', _selectedFoodId);
 
@@ -470,7 +444,7 @@ function updatePhotoPreview() {
   const cam = document.getElementById('meal-photo-camera').files[0];
   const gal = document.getElementById('meal-photo-gallery').files[0];
   const f = cam || gal;
-  document.getElementById('photo-preview').textContent = f ? '📸 ' + f.name + (f.size > 1.5*1024*1024 ? ' (compressing...)' : '') : '';
+  document.getElementById('photo-preview').textContent = f ? '📸 ' + f.name : '';
 }
 
 document.getElementById('meal-photo-camera').addEventListener('change', updatePhotoPreview);
