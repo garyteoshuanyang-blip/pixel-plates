@@ -402,18 +402,44 @@ async function saveToFoodDB() {
 }
 
 // === MEAL FORM ===
+async function compressImage(file) {
+  // Only compress if it's a large image (>1.5MB or not JPEG)
+  if (file.size < 1.5 * 1024 * 1024 && file.type === 'image/jpeg') return file;
+  try {
+    const img = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    const maxDim = 1200;
+    let w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      if (w > h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+      else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+    } else { w = img.width; h = img.height; }
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    return await new Promise(resolve => canvas.toBlob(blob => {
+      if (!blob) return resolve(file);
+      resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.8));
+  } catch(e) { return file; }
+}
+
 document.getElementById('meal-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData();
   form.append('user_id', currentUser.user_id);
-  const photo = document.getElementById('meal-photo-camera').files[0] || document.getElementById('meal-photo-gallery').files[0];
+  let photo = document.getElementById('meal-photo-camera').files[0] || document.getElementById('meal-photo-gallery').files[0];
   const foodName = document.getElementById('meal-name').value;
   if (!photo && !foodName) { 
     document.getElementById('meal-result-text').textContent = 'Take a photo or type a food';
     document.getElementById('meal-result').classList.remove('hidden');
     return;
   }
-  if (photo) form.append('photo', photo);
+  if (photo) {
+    // Compress before upload to avoid proxy size limits
+    photo = await compressImage(photo);
+    form.append('photo', photo);
+  }
   else form.append('food_name', foodName);
   if (_selectedFoodId) form.append('food_db_id', _selectedFoodId);
 
@@ -421,7 +447,9 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
   document.querySelector('#meal-form .btn').disabled = true;
   try {
     const resp = await fetch(API + '/api/meals', { method: 'POST', body: form });
-    const data = await resp.json();
+    const text = await resp.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { detail: text || 'Server error (' + resp.status + ')' }; }
     const r = document.getElementById('meal-result');
     if (resp.ok) {
       document.getElementById('meal-result-text').innerHTML =
@@ -432,8 +460,8 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
       _selectedFoodId = null;
       document.getElementById('photo-preview').textContent = '';
       loadMeals(); loadOverview(); checkStreak();
-    } else { document.getElementById('meal-result-text').textContent = data.detail || 'Error'; r.classList.remove('hidden'); }
-  } catch(e) { document.getElementById('meal-result-text').textContent = 'Error'; document.getElementById('meal-result').classList.remove('hidden'); }
+    } else { document.getElementById('meal-result-text').textContent = data.detail || 'Error (' + resp.status + ')'; r.classList.remove('hidden'); }
+  } catch(e) { document.getElementById('meal-result-text').textContent = 'Connection error: ' + (e.message || 'unknown'); document.getElementById('meal-result').classList.remove('hidden'); }
   document.querySelector('#meal-form .btn').textContent = '➕ Log Meal';
   document.querySelector('#meal-form .btn').disabled = false;
 });
@@ -442,29 +470,7 @@ function updatePhotoPreview() {
   const cam = document.getElementById('meal-photo-camera').files[0];
   const gal = document.getElementById('meal-photo-gallery').files[0];
   const f = cam || gal;
-  document.getElementById('photo-preview').textContent = f ? '📸 ' + f.name : '';
-  // Convert HEIC/large images to JPEG on selection
-  if (f && !cam) {
-    convertToJPEG(f);
-  }
-}
-
-async function convertToJPEG(file) {
-  // Skip if already JPEG
-  if (file.type === 'image/jpeg') return;
-  const img = await createImageBitmap(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.min(img.width, 1920);
-  canvas.height = Math.round(canvas.width * (img.height / img.width));
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-  if (!blob) return;
-  // Replace the gallery file with the converted JPEG
-  const jpegFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
-  const dt = new DataTransfer();
-  dt.items.add(jpegFile);
-  document.getElementById('meal-photo-gallery').files = dt.files;
+  document.getElementById('photo-preview').textContent = f ? '📸 ' + f.name + (f.size > 1.5*1024*1024 ? ' (compressing...)' : '') : '';
 }
 
 document.getElementById('meal-photo-camera').addEventListener('change', updatePhotoPreview);
