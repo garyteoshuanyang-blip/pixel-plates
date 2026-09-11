@@ -434,8 +434,7 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
       _selectedFoodId = null;
       document.getElementById('photo-preview').textContent = '';
       loadMeals(); loadOverview(); checkStreak();
-      // Refresh pet (meal logging can earn XP / perfect-day happiness bonus) + reaction
-      loadPet();
+      // Pet reacts to meal — sets mood reaction, then refreshes bars after 6s
       petReactToMeal(data.food_name, data);
     } else { document.getElementById('meal-result-text').textContent = data.detail || 'Error (' + resp.status + ')'; r.classList.remove('hidden'); }
   } catch(e) { document.getElementById('meal-result-text').textContent = 'Connection error: ' + (e.message || 'unknown'); document.getElementById('meal-result').classList.remove('hidden'); }
