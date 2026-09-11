@@ -434,6 +434,9 @@ document.getElementById('meal-form').addEventListener('submit', async (e) => {
       _selectedFoodId = null;
       document.getElementById('photo-preview').textContent = '';
       loadMeals(); loadOverview(); checkStreak();
+      // Refresh pet (meal logging can earn XP / perfect-day happiness bonus) + reaction
+      loadPet();
+      petReactToMeal(data.food_name, data);
     } else { document.getElementById('meal-result-text').textContent = data.detail || 'Error (' + resp.status + ')'; r.classList.remove('hidden'); }
   } catch(e) { document.getElementById('meal-result-text').textContent = 'Connection error: ' + (e.message || 'unknown'); document.getElementById('meal-result').classList.remove('hidden'); }
   document.querySelector('#meal-form .btn').textContent = '➕ Log Meal';
@@ -1121,6 +1124,31 @@ function getPetMood(happy, hungry) {
   if (happy < 50 && hungry > 80) return "😐 Full but bored... play with me!";
   if (happy < 50 && hungry < 50) return "😕 Not great... Feed & play?";
   return "🙂 Doing alright";
+}
+
+// === Pet Reacts to Meal ===
+function petReactToMeal(foodName, meal) {
+  const el = document.getElementById('pet-mood');
+  if (!el) return;
+  const name = (foodName || '').toLowerCase();
+  const protein = meal && meal.protein ? parseFloat(meal.protein) : 0;
+
+  let msg;
+  if (/fried|fries|deep.fry|bubble.tea|cake|dessert|ice.cream|chocolate|cheese|crispy|burger|pizza|kfc|mcdonald|prata|curry.puff/.test(name)) {
+    msg = `🤤 ${foodName}? My favourite cheat day!`;
+  } else if (/salad|broccoli|chicken.breast|fish|oatmeal|fruit|tofu|yogurt|egg .*|green|vegetable|quinoa|clean|asparagus/.test(name)) {
+    msg = `🥦 ${foodName}? So healthy — proud of you!`;
+  } else if (protein >= 30) {
+    msg = `💪 ${foodName} — that protein, gains incoming!`;
+  } else if (/rice|noodle|mee|bee.h|bak.chor|chicken.rice|fish.ball|kway.teow|hor.fun|briyani|nasi/.test(name)) {
+    msg = `🍚 ${foodName}? Smells amazing from here!`;
+  } else {
+    msg = `😋 ${foodName}? Nom nom, tell me more!`;
+  }
+
+  el.textContent = msg;
+  // Restore normal mood after 6s — loadPet also refreshes bars/XP
+  setTimeout(() => loadPet(), 6000);
 }
 
 async function loadPet() {

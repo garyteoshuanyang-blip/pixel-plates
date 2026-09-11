@@ -749,23 +749,25 @@ def compute_pet_state(user, pet, db):
 
         now = datetime.utcnow()
 
-        # Happiness decay — loses 5 per hour since last played
-        # (Migration guard removed — old streak-based pets were already reset weeks ago)
+        # Happiness decay — loses 2 per hour since last played
+        # Tuned so 2 plays/day (~10 pts) keeps happiness near full within the 25 pts/day cap
+        # (was 5/hr — too aggressive: 6 plays/day = 30 pts > 25 pts max earnings)
         if pet.last_played:
             lp = pet.last_played
             if lp.tzinfo:
                 lp = lp.replace(tzinfo=None)
             hours_since_play = (now - lp).total_seconds() / 3600
-            pet.happiness = max(0, min(100, int(pet.happiness - hours_since_play * 5)))
+            pet.happiness = max(0, min(100, int(pet.happiness - hours_since_play * 2)))
         pet.happiness = max(0, min(100, pet.happiness))
 
-        # Hunger decay — loses 2.5 per hour since last fed
+        # Hunger decay — loses 1.5 per hour since last fed
+        # Tuned so 2 feeds/day (~10 pts) keeps hunger near full (was 2.5/hr)
         if pet.last_fed:
             lf = pet.last_fed
             if lf.tzinfo:
                 lf = lf.replace(tzinfo=None)
             hours_since_fed = (now - lf).total_seconds() / 3600
-            pet.hunger = max(0, min(100, int(pet.hunger - hours_since_fed * 2.5)))
+            pet.hunger = max(0, min(100, int(pet.hunger - hours_since_fed * 1.5)))
         pet.hunger = max(0, min(100, pet.hunger))
     except Exception as e:
         print(f"compute_pet_state error: {e}")
