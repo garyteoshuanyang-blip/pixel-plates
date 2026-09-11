@@ -914,11 +914,12 @@ def update_daily_points(daily, db):
     if user:
         all_points = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == user.id).scalar() or 0
         user.total_points = all_points
-        # Award XP to pet: 25 total points = 1 XP (cumulative, cross-day)
+        # Award XP to pet: 10 total points = 1 XP (cumulative, cross-day)
+        # Rate tuned 2026-09: was 25:1 — too slow now that decay is cheap to maintain
         pet = db.query(Pet).filter(Pet.user_id == user.id).first()
         if pet:
             checkpoint = pet.last_xp_checkpoint or 0
-            earned = all_points // 25 - checkpoint // 25
+            earned = all_points // 10 - checkpoint // 10
             if earned > 0:
                 pet.xp += earned
                 pet.last_xp_checkpoint = all_points
