@@ -5,3 +5,4 @@ __pycache__/
 static/uploads/
 .DS_Store
 *.zip
+*_orig.png

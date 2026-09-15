@@ -97,8 +97,8 @@ def check_and_migrate():
                 name VARCHAR DEFAULT 'Pixel',
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 1,
-                happiness INTEGER DEFAULT 50,
-                hunger INTEGER DEFAULT 50,
+                happiness INTEGER DEFAULT 100,
+                hunger INTEGER DEFAULT 100,
                 last_fed TIMESTAMP DEFAULT NOW(),
                 last_played TIMESTAMP DEFAULT NOW(),
                 last_xp_checkpoint INTEGER DEFAULT 0,
@@ -818,8 +818,6 @@ async def get_pet_data(user_id: int, db: Session = Depends(get_db)):
         "next_stage_at": next_xp,
         "xp_to_next": next_xp - pet.xp if next_xp else 0,
     }
-
-
 @app.post("/api/pet/rename")
 async def rename_pet(user_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
@@ -1276,6 +1274,7 @@ async def edit_meal(
     protein: float = Form(None),
     carbs: float = Form(None),
     fat: float = Form(None),
+    fiber: float = Form(None),
     food_name: str = Form(None),
     db: Session = Depends(get_db),
 ):
@@ -1290,6 +1289,8 @@ async def edit_meal(
         meal.user_protein = protein
         meal.user_carbs = carbs
         meal.user_fat = fat
+    if fiber is not None:
+        meal.user_fiber = fiber
 
     db.commit()
 
@@ -1322,6 +1323,7 @@ async def edit_meal(
         "protein": meal.user_protein or meal.ai_protein or 0,
         "carbs": meal.user_carbs or meal.ai_carbs or 0,
         "fat": meal.user_fat or meal.ai_fat or 0,
+        "fiber": meal.user_fiber or meal.ai_fiber or 0,
     }
 
 
@@ -1456,19 +1458,19 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
 
 # === History ===
 @app.get("/api/history/{user_id}")
-async def get_history(user_id: int, range: str = "week", db: Session = Depends(get_db)):
+async def get_history(user_id: int, period: str = "week", db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404)
     from datetime import timedelta
     today = datetime.now(SGT).date()
-    if range == "week":
+    if period == "week":
         start = today - timedelta(days=7)
         label_format = "%a"
-    elif range == "month":
+    elif period == "month":
         start = today - timedelta(days=30)
         label_format = "%d %b"
-    elif range == "year":
+    elif period == "year":
         start = today - timedelta(days=365)
         label_format = "%b"
     else:

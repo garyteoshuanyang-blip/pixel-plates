@@ -790,9 +790,7 @@ async function loadChart() {
     document.getElementById('chart-summary').textContent = 'Could not load chart data';
   }
 
-
-  }
-
+}
 
 // === MY FOOD LOG (for clients to see own history) ===
 function switchMyLogDays(days) {
@@ -1098,6 +1096,7 @@ document.getElementById('edit-meal-form').addEventListener('submit', async (e) =
   f.append('protein', document.getElementById('edit-protein').value);
   f.append('carbs', document.getElementById('edit-carbs').value);
   f.append('fat', document.getElementById('edit-fat').value);
+  f.append('fiber', document.getElementById('edit-fiber').value);
   f.append('food_name', document.getElementById('edit-food-name').value);
   try {
     const resp = await fetch(API + '/api/meals/' + editingMealId, { method: 'PUT', body: f });
@@ -1288,14 +1287,6 @@ async function loadTrainerSummary() {
     container.innerHTML = '<p class="muted">Could not load summary</p>';
   }
 }
-
-// Override loadMyClients to also load summary
-const origLoadMyClients = loadMyClients;
-loadMyClients = function() {
-  if (!currentUser) return;
-  loadTrainerSummary();
-  origLoadMyClients();
-};
 
 // Auto refresh
 setInterval(() => {

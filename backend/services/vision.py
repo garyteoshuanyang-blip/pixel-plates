@@ -184,7 +184,7 @@ async def analyze_food_text(food_description: str) -> dict:
                         "Content-Type": "application/json",
                     },
                     json={
-                        "model": "google/gemini-2.5-flash",
+                        "model": VISION_MODEL,
                         "messages": [{"role": "user", "content": current_prompt}],
                         "max_tokens": 800,
                     },
