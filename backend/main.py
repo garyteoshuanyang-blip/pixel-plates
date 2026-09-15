@@ -1069,7 +1069,7 @@ async def update_macros(
 
 def _join_food_names(result: dict) -> str:
     """Join all food item names from AI analysis into one descriptive name.
-    e.g. ['Grilled Chicken', 'Steamed Rice', 'Stir-fry Veg'] → 'Grilled Chicken + Rice + Vegetables'"""
+    e.g. ['Grilled Chicken', 'Steamed Rice', 'Stir-fry Veg'] → 'Grilled chicken, Rice, Vegetables'"""
     foods = result.get("foods", [])
     names = [f.get("name", "").strip() for f in foods if f.get("name")]
     if not names:
@@ -1084,7 +1084,7 @@ def _join_food_names(result: dict) -> str:
             short.append(parts[0] + " " + parts[1])
         else:
             short.append(n)
-    return " + ".join(short[:4])  # Max 4 items in name
+    return ", ".join(short[:4])  # Max 4 items in name
 
 @app.post("/api/meals")
 async def create_meal(
