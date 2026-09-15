@@ -1066,6 +1066,26 @@ async def update_macros(
 
 
 # === Meals ===
+
+def _join_food_names(result: dict) -> str:
+    """Join all food item names from AI analysis into one descriptive name.
+    e.g. ['Grilled Chicken', 'Steamed Rice', 'Stir-fry Veg'] → 'Grilled Chicken + Rice + Vegetables'"""
+    foods = result.get("foods", [])
+    names = [f.get("name", "").strip() for f in foods if f.get("name")]
+    if not names:
+        return "Unknown"
+    if len(names) == 1:
+        return names[0]
+    # For multiple items, join with + (shorten each name to core word)
+    short = []
+    for n in names:
+        parts = n.split()
+        if len(parts) > 2:
+            short.append(parts[0] + " " + parts[1])
+        else:
+            short.append(n)
+    return " + ".join(short[:4])  # Max 4 items in name
+
 @app.post("/api/meals")
 async def create_meal(
     user_id: int = Form(...),
@@ -1124,7 +1144,7 @@ async def create_meal(
     meal = Meal(
         user_id=user_id,
         photo_path=photo_path,
-        food_name=db_food.name if db_food else (food_name or (result.get("foods", [{}])[0].get("name", "Unknown") if photo_path else food_name)),
+        food_name=db_food.name if db_food else (food_name or _join_food_names(result) if photo_path else food_name),
         ai_calories=ai_calories,
         ai_protein=db_food.protein_g if db_food else result.get("protein_g", 0),
         ai_carbs=db_food.carbs_g if db_food else result.get("carbs_g", 0),
