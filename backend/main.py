@@ -922,6 +922,10 @@ def update_daily_points(daily, db):
                 pet.xp += earned
                 pet.last_xp_checkpoint = all_points
                 compute_pet_state(user, pet, db)
+            elif earned < 0:
+                # Points decreased (meal edit/delete) — reset checkpoint so
+                # future earnings aren't blocked by a stale high-water mark
+                pet.last_xp_checkpoint = all_points
             # Perfect day bonus: all 4 targets hit (25/25) → +10 happiness
             if total >= 25:
                 pet.happiness = min(100, pet.happiness + 10)
