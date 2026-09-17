@@ -1036,6 +1036,7 @@ function openEditMeal(id, name, cal, pro, carbs, fat, fiber) {
   document.getElementById('edit-protein').value = fmt(pro) || 0;
   document.getElementById('edit-carbs').value = fmt(carbs) || 0;
   document.getElementById('edit-fat').value = fmt(fat) || 0;
+  document.getElementById('edit-fiber').value = fmt(fiber) || 0;
   document.getElementById('edit-error').textContent = '';
   _calManuallyEdited = false;
   autoCalcCalories();
