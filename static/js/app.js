@@ -354,10 +354,12 @@ async function saveToFoodDB() {
   statusEl.textContent = '';
 
   try {
-    const f = new FormData();
-    if (variant) f.append('variant_name', variant);
-
-    const resp = await fetch(API + '/api/food/from-meal/' + editingMealId, { method: 'POST', body: f });
+    const body = { variant_name: variant || null };
+    const resp = await fetch(API + '/api/food/from-meal/' + editingMealId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     const data = await resp.json();
 
     if (resp.ok && data.ok !== false) {

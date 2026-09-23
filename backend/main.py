@@ -2,7 +2,7 @@
 import os
 import uuid
 from datetime import date, datetime, timezone, timedelta
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 SGT = timezone(timedelta(hours=8))
@@ -566,12 +566,32 @@ async def add_food(name: str = Form(...), serving: str = Form("1 serving"),
 
 
 @app.post("/api/food/from-meal/{meal_id}")
-async def save_meal_to_food_db(meal_id: int, variant_name: str = Form(None), db: Session = Depends(get_db)):
+async def save_meal_to_food_db(
+    meal_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
     """Save an AI-estimated meal as a food DB entry (teaches the app).
     If a food with the same name already exists and no variant_name is given,
     returns name_conflict so the frontend can prompt the user to create a variant.
     Pass variant_name to create a new entry with that name.
+    Accepts both FormData (multipart) and JSON bodies.
     """
+    # Parse variant_name from JSON or form body
+    variant_name = None
+    ctype = (request.headers.get("content-type") or "").lower()
+    if "application/json" in ctype:
+        try:
+            json_body = await request.json()
+            variant_name = json_body.get("variant_name") if isinstance(json_body, dict) else None
+        except Exception:
+            variant_name = None
+    else:
+        try:
+            form = await request.form()
+            variant_name = form.get("variant_name")
+        except Exception:
+            variant_name = None
     meal = db.query(Meal).filter(Meal.id == meal_id).first()
     if not meal:
         raise HTTPException(404, "Meal not found")
