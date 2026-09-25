@@ -46,9 +46,6 @@ body {
 .pixel-logo { font-family: 'Courier New', monospace; font-size: 6px; line-height: 1.1; color: var(--gold); text-align: center; white-space: pre; overflow: hidden; }
 .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 
-/* Compact brand line on app pages (replaces the repeated ASCII logo) */
-.app-brand { text-align: center; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); opacity: 0.65; font-weight: 700; margin: 2px 0 8px; }
-
 /* Tabs */
 .tab-bar { display: flex; gap: 4px; margin-bottom: 12px; }
 .tab { flex: 1; min-height: 44px; padding: 8px; background: var(--bg); border: 2px solid var(--border); color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
