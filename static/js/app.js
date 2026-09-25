@@ -7,6 +7,8 @@ let lbPeriod = 'daily';
 let cdDays = 7;
 let myLogDays = 7;
 let selectedClientId = null;
+let _mealsById = {};
+let _clientsById = {};
 
 // Round floats for display: 108.30000000000003 → 108.3, 209.0000001 → 209
 function fmt(n) {
@@ -87,6 +89,8 @@ function logoutUser() {
 // === REGISTER ===
 document.getElementById('register-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const regErr = document.getElementById('reg-error');
+  regErr.style.color = '';
   const name = document.getElementById('reg-name').value;
   const email = document.getElementById('reg-email').value;
   const password = document.getElementById('reg-password').value;
@@ -107,7 +111,8 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
       currentUser.role = ld.role;
       localStorage.setItem('pixelplates_user', JSON.stringify(currentUser));
       if (ld.role === 'trainer') {
-        document.getElementById('reg-error').textContent = '✅ Trainer account created!';
+        regErr.textContent = '✅ Trainer account created!';
+        regErr.style.color = 'var(--success)';
         showScreen('onboard');
         const clientsBtn = document.getElementById('nav-myclients');
         if (clientsBtn) clientsBtn.style.display = 'block';
@@ -274,18 +279,20 @@ async function loadMeals() {
     const meals = await resp.json();
     const list = document.getElementById('ov-meals');
     if (!meals.length) { list.innerHTML = '<p class="muted">No meals logged yet</p>'; return; }
+    meals.forEach(m => { _mealsById[m.id] = m; });
     list.innerHTML = meals.map(m =>
           `<div class="meal-item">
             <span class="cal">${fmt(m.calories)}</span>
             <span class="name">${m.food_name || 'Unknown'}<span class="meal-macros">P:${fmt(m.protein)}g C:${fmt(m.carbs)}g F:${fmt(m.fat)}g 🌿${fmt(m.fiber)}g</span>${m.nutrition_comment ? `<span class="nutrition-comment">💬 ${m.nutrition_comment}</span>` : ''}</span>
             <span class="time">${m.time ? new Date(m.time).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : ''}</span>
-            <button class="meal-btn" onclick="openEditMeal(${m.id},'${(m.food_name||'').replace(/'/g, "\\'")}',${fmt(m.calories)},${fmt(m.protein)},${fmt(m.carbs)},${fmt(m.fat)},${fmt(m.fiber)})">✏️</button>
+            <button class="meal-btn" onclick="openEditMealById(${m.id})">✏️</button>
             <button class="del-btn" onclick="deleteMeal(${m.id})">✕</button>
           </div>`).join('');
   } catch(e) {}
 }
 
 async function deleteMeal(id) {
+  if (!confirm('Delete this meal? This cannot be undone.')) return;
   try { await fetch(API + '/api/meals/' + id, { method: 'DELETE' }); loadMeals(); loadOverview(); } catch(e) {}
 }
 
@@ -387,7 +394,7 @@ async function saveToFoodDB() {
         promptEl.innerHTML = `
           <p style="font-size:12px;font-weight:600;margin-bottom:6px">📝 <strong>"${data.existing_name}"</strong> already exists (${data.existing_calories} cal)</p>
           <p style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Your version has ${data.meal_calories} cal — save as a variant?</p>
-          <input type="text" id="save-variant-input" placeholder="e.g. Bak Chor Mee (Less Noodles)" style="width:100%;padding:6px 8px;border:1px solid var(--accent);border-radius:4px;font-size:12px;margin-bottom:6px">
+          <input type="text" id="save-variant-input" placeholder="e.g. Bak Chor Mee (Less Noodles)" style="width:100%;padding:6px 8px;border:1px solid var(--accent);border-radius:4px;font-size:16px;margin-bottom:6px">
           <button onclick="saveToFoodDB()" class="btn" style="font-size:12px;padding:6px 10px;width:100%">💾 Save Variant</button>
         `;
         document.getElementById('edit-modal').appendChild(promptEl);
@@ -859,6 +866,18 @@ async function loadMyFoodLog() {
 }
 
 // === MY CLIENTS ===
+function viewClientById(id) {
+  const c = _clientsById[id];
+  if (!c) return;
+  viewClientDetail(c.id, c.name);
+}
+
+function removeClientById(id) {
+  const c = _clientsById[id];
+  if (!c) return;
+  removeClient(c.id, c.name);
+}
+
 function viewClientDetail(clientId, clientName) {
   selectedClientId = clientId;
   cdDays = 7;  // Reset to default 7 days
@@ -977,14 +996,15 @@ async function loadMyClients() {
       list.innerHTML = '<p class="muted">No clients yet. Approve pending sign-ups in Profile.</p>';
       return;
     }
+    clients.forEach(c => { _clientsById[c.id] = c; });
     list.innerHTML = clients.map(c => `
       <div class="client-row">
-        <div class="client-row-main" onclick="viewClientDetail(${c.id}, '${c.name.replace(/'/g, "\\'")}')">
+        <div class="client-row-main" onclick="viewClientById(${c.id})">
           <span class="client-name">${c.name}</span>
           <span class="client-pts">🏆 ${c.total_points} pts</span>
           <span class="client-arrow">▶</span>
         </div>
-        <button class="client-remove-btn" onclick="removeClient(${c.id}, '${c.name.replace(/'/g, "\\'")}')" title="Remove client">✕</button>
+        <button class="client-remove-btn" onclick="removeClientById(${c.id})" title="Remove client">✕</button>
       </div>
     `).join('');
   } catch(e) {
@@ -1030,6 +1050,12 @@ document.addEventListener('focusin', function(e) {
     document.getElementById('edit-calc-badge').style.display = 'none';
   }
 });
+
+function openEditMealById(id) {
+  const m = _mealsById[id];
+  if (!m) return;
+  openEditMeal(m.id, m.food_name || '', m.calories, m.protein, m.carbs, m.fat, m.fiber);
+}
 
 function openEditMeal(id, name, cal, pro, carbs, fat, fiber) {
   editingMealId = id;

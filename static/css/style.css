@@ -46,13 +46,17 @@ body {
 .pixel-logo { font-family: 'Courier New', monospace; font-size: 6px; line-height: 1.1; color: var(--gold); text-align: center; white-space: pre; overflow: hidden; }
 .subtitle { color: var(--text-dim); font-size: 13px; margin-top: 4px; }
 
+/* Compact brand line on app pages (replaces the repeated ASCII logo) */
+.app-brand { text-align: center; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); opacity: 0.65; font-weight: 700; margin: 2px 0 8px; }
+
 /* Tabs */
 .tab-bar { display: flex; gap: 4px; margin-bottom: 12px; }
-.tab { flex: 1; padding: 8px; background: var(--bg); border: 2px solid var(--border); color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.tab { flex: 1; min-height: 44px; padding: 8px; background: var(--bg); border: 2px solid var(--border); color: var(--text-dim); cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
 .tab.active { background: var(--accent); border-color: var(--accent); color: white; }
 
 /* Forms */
-input, select { width: 100%; padding: 10px; margin-bottom: 8px; background: var(--bg); border: 2px solid var(--border); color: var(--text); font-family: inherit; font-size: 14px; outline: none; }
+/* 16px keeps iOS Safari from auto-zooming when a field is focused */
+input, select, textarea { width: 100%; padding: 10px; margin-bottom: 8px; background: var(--bg); border: 2px solid var(--border); color: var(--text); font-family: inherit; font-size: 16px; outline: none; }
 input:focus, select:focus { border-color: var(--accent2); }
 select { appearance: none; cursor: pointer; }
 label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 2px; }
@@ -91,8 +95,8 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .page.active { display: block; }
 
 /* Bottom nav */
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--nav-bg); border-top: 2px solid var(--border); display: flex; justify-content: space-around; padding: 8px 0; max-width: 500px; margin: 0 auto; z-index: 100; }
-.nav-btn { background: none; border: none; color: var(--text-dim); font-family: inherit; font-size: 12px; padding: 4px 16px; cursor: pointer; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--nav-bg); border-top: 2px solid var(--border); display: flex; justify-content: space-around; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); max-width: 500px; margin: 0 auto; z-index: 100; }
+.nav-btn { background: none; border: none; color: var(--text-dim); font-family: inherit; font-size: 12px; min-height: 44px; padding: 10px 16px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .nav-btn.active { color: var(--accent2); }
 
 /* Macro rows */
@@ -120,7 +124,7 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .meal-item .meal-macros { font-size: 11px; color: var(--text-dim); display: block; }
 .meal-item .nutrition-comment { font-size: 11px; color: var(--accent2); display: block; margin-top: 2px; font-style: italic; }
 .meal-item .time { font-size: 11px; color: var(--text-dim); }
-.meal-item .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; padding: 2px; }
+.meal-item .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 16px; min-height: 36px; min-width: 36px; padding: 6px; }
 
 #bonus-content { text-align: center; font-size: 15px; color: var(--gold); }
 
@@ -238,7 +242,7 @@ label { display: block; font-size: 11px; font-weight: 600; text-transform: upper
 .modal-card h2 { margin-bottom: 12px; }
 
 /* Edit button on meals */
-.meal-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); font-size: 10px; padding: 2px 6px; cursor: pointer; border-radius: 3px; }
+.meal-btn { background: none; border: 1px solid var(--border); color: var(--text-dim); font-size: 12px; min-height: 36px; min-width: 36px; padding: 6px 10px; cursor: pointer; border-radius: 3px; }
 
 /* Summary dashboard */
 .summary-grid { margin-top: 6px; }
