@@ -1155,8 +1155,18 @@ async def create_meal(
     if food_db_id:
         db_food = db.query(FoodItem).filter(FoodItem.id == food_db_id).first()
         if db_food:
-            result = {}
+            # Library picks must feed BOTH the meal row and the daily totals.
+            # (Previously `result = {}` here, which zeroed the macros added to the
+            #  daily log below — calories were counted, macros were not.)
             ai_calories = db_food.calories
+            result = {
+                "total_calories": db_food.calories or 0,
+                "protein_g": db_food.protein_g or 0,
+                "carbs_g": db_food.carbs_g or 0,
+                "fat_g": db_food.fat_g or 0,
+                "fiber_g": db_food.fiber_g or 0,
+                "comment": "From food database ✓" if db_food.is_verified else "",
+            }
             # Also bump popularity
 
     if not photo and not food_name:
@@ -1175,6 +1185,10 @@ async def create_meal(
         ai_fat=db_food.fat_g if db_food else result.get("fat_g", 0),
         ai_fiber=db_food.fiber_g if db_food else result.get("fiber_g", 0),
         user_calories=calories,
+        user_protein=protein,
+        user_carbs=carbs,
+        user_fat=fat,
+        user_fiber=fiber,
         notes=notes,
         nutrition_comment=db_food and db_food.is_verified and "From food database ✓" or result.get("comment", ""),
     )
@@ -1200,11 +1214,17 @@ async def create_meal(
         )
         db.add(daily)
 
-    daily.total_calories = (daily.total_calories or 0) + final_calories
-    daily.total_protein = (daily.total_protein or 0) + result.get("protein_g", 0)
-    daily.total_carbs = (daily.total_carbs or 0) + result.get("carbs_g", 0)
-    daily.total_fat = (daily.total_fat or 0) + result.get("fat_g", 0)
-    daily.total_fiber = (daily.total_fiber or 0) + result.get("fiber_g", 0)
+    # Precedence for the day's totals: explicit user value > library/AI estimate
+    eff_protein = protein if protein is not None else result.get("protein_g", 0)
+    eff_carbs = carbs if carbs is not None else result.get("carbs_g", 0)
+    eff_fat = fat if fat is not None else result.get("fat_g", 0)
+    eff_fiber = fiber if fiber is not None else result.get("fiber_g", 0)
+
+    daily.total_calories = (daily.total_calories or 0) + (final_calories or 0)
+    daily.total_protein = (daily.total_protein or 0) + (eff_protein or 0)
+    daily.total_carbs = (daily.total_carbs or 0) + (eff_carbs or 0)
+    daily.total_fat = (daily.total_fat or 0) + (eff_fat or 0)
+    daily.total_fiber = (daily.total_fiber or 0) + (eff_fiber or 0)
     daily.meal_count = (daily.meal_count or 0) + 1
     daily.goal_met = is_cal_goal_met(user.goal_type, daily.total_calories, daily.goal_calories)
 
@@ -1224,11 +1244,12 @@ async def create_meal(
     return {
         "meal_id": meal.id,
         "food_name": meal.food_name,
-        "calories": final_calories,
-        "protein": result.get("protein_g", 0),
-        "carbs": result.get("carbs_g", 0),
-        "fat": result.get("fat_g", 0),
-        "fiber": result.get("fiber_g", 0),
+        # Report what was actually recorded (user override > library/AI estimate)
+        "calories": meal.user_calories or meal.ai_calories or 0,
+        "protein": meal.user_protein or meal.ai_protein or 0,
+        "carbs": meal.user_carbs or meal.ai_carbs or 0,
+        "fat": meal.user_fat or meal.ai_fat or 0,
+        "fiber": meal.user_fiber or meal.ai_fiber or 0,
         "ai_calories": ai_calories,
         "nutrition_comment": result.get("comment", ""),
         "daily_total": daily.total_calories,
@@ -1328,10 +1349,14 @@ async def edit_meal(
 
     if food_name is not None:
         meal.food_name = food_name
+    # Update only the fields supplied, so a partial edit can't null out the others
     if calories is not None:
         meal.user_calories = calories
+    if protein is not None:
         meal.user_protein = protein
+    if carbs is not None:
         meal.user_carbs = carbs
+    if fat is not None:
         meal.user_fat = fat
     if fiber is not None:
         meal.user_fiber = fiber
