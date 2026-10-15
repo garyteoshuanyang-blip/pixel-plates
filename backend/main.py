@@ -93,7 +93,7 @@ def check_and_migrate():
         conn.execute(sql_text("""
             CREATE TABLE pets (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) UNIQUE,
+                user_id INTEGER REFERENCES users(id),
                 name VARCHAR DEFAULT 'Pixel',
                 xp INTEGER DEFAULT 0,
                 level INTEGER DEFAULT 1,
@@ -107,7 +107,7 @@ def check_and_migrate():
         """))
         print("✅ Created pets table")
 
-    # Migrate existing pets table: add last_xp_checkpoint
+    # Migrate existing pets table: checkpoint + multi-spirit columns
     if 'pets' in tables:
         try:
             pet_cols = [c['name'] for c in inspector.get_columns('pets')]
@@ -116,6 +116,28 @@ def check_and_migrate():
                     from sqlalchemy import text as sql_text_mig
                     conn2.execute(sql_text_mig("ALTER TABLE pets ADD COLUMN last_xp_checkpoint INTEGER DEFAULT 0"))
                 print("✅ Added last_xp_checkpoint to pets table")
+
+            # --- Multi-spirit support (collection + farm) ---
+            # Existing rows get species='chicken' and is_active=TRUE, so every
+            # user keeps their current pet as the active one. No data touched.
+            with engine.begin() as conn2:
+                from sqlalchemy import text as sql_text_mig
+                if 'species' not in pet_cols:
+                    conn2.execute(sql_text_mig("ALTER TABLE pets ADD COLUMN species VARCHAR DEFAULT 'chicken'"))
+                    print("✅ Added species to pets table")
+                if 'is_active' not in pet_cols:
+                    conn2.execute(sql_text_mig("ALTER TABLE pets ADD COLUMN is_active BOOLEAN DEFAULT TRUE"))
+                    print("✅ Added is_active to pets table")
+                if 'retired_at' not in pet_cols:
+                    conn2.execute(sql_text_mig("ALTER TABLE pets ADD COLUMN retired_at TIMESTAMP"))
+                    print("✅ Added retired_at to pets table")
+                # Drop the one-pet-per-user rule so a collection can exist.
+                # Safe: the column stays, only the UNIQUE index is removed.
+                try:
+                    conn2.execute(sql_text_mig("ALTER TABLE pets DROP CONSTRAINT IF EXISTS pets_user_id_key"))
+                    print("✅ Dropped pets one-per-user constraint")
+                except Exception as e:
+                    print(f"⚠️ pets constraint drop skipped: {e}")
         except Exception as e:
             print(f"⚠️ Pets migration skipped: {e}")
 
@@ -749,7 +771,119 @@ async def get_achievements(user_id: int, db: Session = Depends(get_db)):
 # === Pet State Computation ===
 
 
-STAGE_XP_THRESHOLDS = [0, 14, 28, 42]  # stage 1, 2, 3, 4
+# === Species Registry ==========================================================
+# Adding a new spirit in future = ONE entry here + its sprite files. No logic.
+# Stage counts may differ per species — the chicken has 4; new sets may have 5.
+SPECIES = {
+    "chicken": {
+        "label": "Chicken",
+        "names": ["Egg", "Hatch", "Chick", "Adult"],
+        "thresholds": [0, 14, 28, 42],
+        "sprites": ["pet-stage1.png", "pet-stage2.png",
+                    "pet-stage3.png", "pet-stage4.png"],
+    },
+    # --- Set 1: the duck (5 stages) ---
+    "duck": {
+        "label": "Duck",
+        "names": ["Egg", "Cracked egg", "Hatched duck", "Baby duck", "Adult duck"],
+        "thresholds": [0, 14, 28, 42, 56],
+        "sprites": ["duck-stage1.png", "duck-stage2.png", "duck-stage3.png",
+                    "duck-stage4.png", "duck-stage5.png"],
+    },
+    # --- Set 2: the tortoise (5 stages) ---
+    "tortoise": {
+        "label": "Tortoise",
+        "names": ["Egg", "Cracked egg", "Hatched tortoise", "Baby tortoise", "Adult tortoise"],
+        "thresholds": [0, 14, 28, 42, 56],
+        "sprites": ["tortoise-stage1.png", "tortoise-stage2.png", "tortoise-stage3.png",
+                    "tortoise-stage4.png", "tortoise-stage5.png"],
+    },
+}
+DEFAULT_SPECIES = "chicken"
+UNLOCK_XP = 14  # XP past the final stage that unlocks adopting a new spirit
+# Kept for backwards compatibility with any other caller.
+STAGE_XP_THRESHOLDS = SPECIES[DEFAULT_SPECIES]["thresholds"]
+
+
+def species_def(key):
+    """Look up a species, falling back to the default. Never raises."""
+    return SPECIES.get(key or DEFAULT_SPECIES) or SPECIES[DEFAULT_SPECIES]
+
+
+def species_released(spec, now=None):
+    """Is this species live yet? A future `released_at` keeps it 'coming soon'.
+
+    Absent/None means released, so existing species need no change. Add a species
+    with a future date and it appears on its own when the date passes — no redeploy.
+    """
+    ra = spec.get("released_at")
+    if not ra:
+        return True
+    try:
+        return datetime.fromisoformat(str(ra)) <= (now or datetime.utcnow())
+    except Exception:
+        return True
+
+
+def released_species():
+    """Species keys that are live, in config order."""
+    return [k for k, v in SPECIES.items() if species_released(v)]
+
+
+def stage_for_xp(spec, xp):
+    """Which stage this XP sits in (1-based), clamped to the species' stage count."""
+    lvl = 1
+    for i, threshold in enumerate(spec["thresholds"]):
+        if xp >= threshold:
+            lvl = i + 1
+        else:
+            break
+    return min(lvl, len(spec["thresholds"]))
+
+
+def next_target(spec, xp):
+    """XP the bar fills toward: the next stage — or, once at the final stage,
+    the threshold that unlocks adopting a new spirit (the 'extended' bar)."""
+    lvl = stage_for_xp(spec, xp)
+    if lvl < len(spec["thresholds"]):
+        return spec["thresholds"][lvl]
+    return spec["thresholds"][-1] + UNLOCK_XP
+
+
+def spirit_unlocked(spec, xp):
+    """True once the extended bar is full — the user may adopt a new spirit."""
+    return xp >= spec["thresholds"][-1] + UNLOCK_XP
+
+
+def get_active_pet(db, user_id):
+    """The one pet that decays and earns XP. Retired pets are view-only."""
+    return (db.query(Pet)
+              .filter(Pet.user_id == user_id, Pet.is_active == True)
+              .first())
+
+
+def pet_payload(pet):
+    """Serialize a pet for the API — species-aware, stage-count-agnostic."""
+    spec = species_def(pet.species)
+    stage = stage_for_xp(spec, pet.xp)
+    target = next_target(spec, pet.xp)
+    total = len(spec["thresholds"])
+    at_final = stage >= total
+    idx = min(stage - 1, len(spec["sprites"]) - 1)
+    return {
+        "id": pet.id, "name": pet.name, "xp": pet.xp,
+        "level": stage, "stage": stage, "stages": total,
+        "species": pet.species or DEFAULT_SPECIES,
+        "species_label": spec["label"],
+        "stage_name": spec["names"][min(stage - 1, len(spec["names"]) - 1)],
+        "sprite": spec["sprites"][idx],
+        "happiness": pet.happiness, "hunger": pet.hunger,
+        "next_stage_at": target,
+        "xp_to_next": max(0, target - pet.xp),
+        "at_final_stage": at_final,
+        "new_spirit_unlocked": bool(at_final and spirit_unlocked(spec, pet.xp)),
+    }
+
 
 def compute_pet_state(user, pet, db):
     """Calculate level, happiness (decay since last play), hunger (decay since last feed).
@@ -758,14 +892,8 @@ def compute_pet_state(user, pet, db):
     if not pet:
         return None
     try:
-        # Level from XP (1-4)
-        level = 1
-        for i, threshold in enumerate(STAGE_XP_THRESHOLDS):
-            if pet.xp >= threshold:
-                level = i + 1
-            else:
-                break
-        pet.level = level
+        # Level from XP — species-aware (stage counts differ per species)
+        pet.level = stage_for_xp(species_def(pet.species), pet.xp)
 
         now = datetime.utcnow()
 
@@ -800,50 +928,38 @@ def compute_pet_state(user, pet, db):
 
 @app.post("/api/pet/create/{user_id}")
 async def create_pet(user_id: int, db: Session = Depends(get_db)):
-    """Create a pet for a user (one per user). Auto-called on first load if missing."""
+    """Create the user's first spirit. Auto-called on first load if missing."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    existing = db.query(Pet).filter(Pet.user_id == user_id).first()
+    existing = get_active_pet(db, user_id)
     if existing:
         return await get_pet_data(user_id, db)
-    pet = Pet(user_id=user_id, name="Pixel")
+    pet = Pet(user_id=user_id, name="Pixel", species=DEFAULT_SPECIES, is_active=True)
     db.add(pet)
     db.commit()
     db.refresh(pet)
     pet = compute_pet_state(user, pet, db)
-    return {
-        "id": pet.id, "name": pet.name, "xp": pet.xp,
-        "level": pet.level, "stage": pet.level,
-        "happiness": pet.happiness, "hunger": pet.hunger,
-        "next_stage_at": STAGE_XP_THRESHOLDS[pet.level] if pet.level < 4 else None,
-    }
+    return pet_payload(pet)
 
 
 @app.get("/api/pet/{user_id}")
 async def get_pet_data(user_id: int, db: Session = Depends(get_db)):
-    """Get current pet state for a user. Auto-creates if missing."""
+    """Active spirit state for a user. Auto-creates if missing."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404, "User not found")
-    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    pet = get_active_pet(db, user_id)
     if not pet:
         return await create_pet(user_id, db)
     pet = compute_pet_state(user, pet, db)
-    next_xp = STAGE_XP_THRESHOLDS[pet.level] if pet.level < 4 else None
-    return {
-        "id": pet.id, "name": pet.name, "xp": pet.xp,
-        "level": pet.level, "stage": pet.level,
-        "happiness": pet.happiness, "hunger": pet.hunger,
-        "next_stage_at": next_xp,
-        "xp_to_next": next_xp - pet.xp if next_xp else 0,
-    }
+    return pet_payload(pet)
 @app.post("/api/pet/rename")
 async def rename_pet(user_id: int = Form(...), name: str = Form(...), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404)
-    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    pet = get_active_pet(db, user_id)
     if not pet:
         raise HTTPException(404, "No pet yet")
     pet.name = name[:20]  # Max 20 chars
@@ -857,7 +973,7 @@ async def feed_pet(user_id: int = Form(...), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404)
-    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    pet = get_active_pet(db, user_id)
     if not pet:
         raise HTTPException(404, "No pet yet")
     if (user.total_points or 0) < 5:
@@ -875,7 +991,7 @@ async def play_with_pet(user_id: int = Form(...), db: Session = Depends(get_db))
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404)
-    pet = db.query(Pet).filter(Pet.user_id == user_id).first()
+    pet = get_active_pet(db, user_id)
     if not pet:
         raise HTTPException(404, "No pet yet")
     if (user.total_points or 0) < 5:
@@ -885,6 +1001,141 @@ async def play_with_pet(user_id: int = Form(...), db: Session = Depends(get_db))
     pet.last_played = datetime.utcnow()
     db.commit()
     return {"hunger": pet.hunger, "happiness": pet.happiness, "remaining_points": user.total_points}
+
+
+@app.post("/api/pet/adopt")
+async def adopt_spirit(user_id: int = Form(...), species: str = Form(None), db: Session = Depends(get_db)):
+    """Retire the active spirit to the farm and start a new egg.
+
+    Gated on the extended bar: the current spirit must have earned UNLOCK_XP past
+    its final stage. Retired spirits are view-only — never reactivated, never decayed.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    current = get_active_pet(db, user_id)
+    if not current:
+        raise HTTPException(404, "No spirit yet")
+
+    cur_spec = species_def(current.species)
+    if not spirit_unlocked(cur_spec, current.xp):
+        remaining = (cur_spec["thresholds"][-1] + UNLOCK_XP) - current.xp
+        raise HTTPException(400, f"Finish the extended XP bar to unlock a new spirit ({remaining} XP to go)")
+
+    # If every RELEASED species is already in this user's collection there is nothing
+    # new to collect. Under the slow-release model they simply wait for the next drop —
+    # re-raising a species you already have is not collection progress.
+    owned = {p.species for p in db.query(Pet).filter(Pet.user_id == user_id).all()}
+    live = released_species()
+    if live and all(k in owned for k in live):
+        raise HTTPException(400, "You've collected every spirit so far — a new one is coming soon!")
+
+    # Otherwise: honour an explicit choice from the released set, else auto-give the
+    # next unowned released species (a discovery moment, no menu needed).
+    if species and species in live:
+        pick = species
+    else:
+        pick = next((k for k in live if k not in owned), None)
+        if pick is None:
+            raise HTTPException(400, "No new spirit available right now")
+
+    # Retire the current spirit — frozen forever, visible in the farm.
+    current.is_active = False
+    current.retired_at = datetime.utcnow()
+
+    spec = species_def(pick)
+    new_pet = Pet(
+        user_id=user_id, name=spec["label"], species=pick, is_active=True,
+        xp=0, level=1, happiness=100, hunger=100, last_xp_checkpoint=0,
+    )
+    db.add(new_pet)
+    db.commit()
+    db.refresh(new_pet)
+    compute_pet_state(user, new_pet, db)
+    return {"adopted": pet_payload(new_pet), "retired": current.name}
+
+
+@app.get("/api/pet/farm/{user_id}")
+async def get_farm(user_id: int, db: Session = Depends(get_db)):
+    """The user's spirit collection — the active one plus every retired spirit."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    pets = (db.query(Pet)
+              .filter(Pet.user_id == user_id)
+              .order_by(Pet.is_active.desc(), Pet.created_at.asc())
+              .all())
+    active = next((p for p in pets if p.is_active), None)
+    if active:
+        compute_pet_state(user, active, db)
+    retired = [p for p in pets if not p.is_active]
+
+    def farm_row(p):
+        spec = species_def(p.species)
+        st = stage_for_xp(spec, p.xp)
+        return {
+            "id": p.id, "name": p.name,
+            "species": p.species or DEFAULT_SPECIES,
+            "species_label": spec["label"],
+            "sprite": spec["sprites"][min(st - 1, len(spec["sprites"]) - 1)],
+            "stage": st, "stages": len(spec["thresholds"]),
+            "stage_name": spec["names"][min(st - 1, len(spec["names"]) - 1)],
+            "xp": p.xp,
+            "retired_at": p.retired_at.isoformat() if p.retired_at else None,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+
+    # ---- the album: every species in config order, with its collection state ----
+    # Names of un-owned species are deliberately NOT sent — a silhouette should
+    # tease the shape, not give away what it is.
+    by_species = {}
+    for p in pets:
+        cur = by_species.get(p.species)
+        if cur is None or (p.xp or 0) > (cur.xp or 0):
+            by_species[p.species] = p
+
+    collection = []
+    for key, spec in SPECIES.items():
+        p = by_species.get(key)
+        if p is not None:
+            st = stage_for_xp(spec, p.xp)
+            idx = min(st - 1, len(spec["sprites"]) - 1)
+            collection.append({
+                "key": key, "state": "owned",
+                "label": spec["label"],
+                "sprite": spec["sprites"][idx],
+                "stage": st, "stages": len(spec["thresholds"]),
+                "stage_name": spec["names"][min(st - 1, len(spec["names"]) - 1)],
+                "name": p.name, "is_active": bool(p.is_active),
+            })
+        elif species_released(spec):
+            collection.append({
+                "key": key, "state": "undiscovered",
+                "sprite": spec["sprites"][-1],      # adult silhouette as the teaser
+            })
+        else:
+            collection.append({
+                "key": key, "state": "locked",
+                "released_at": spec.get("released_at"),
+            })
+
+    collected = sum(1 for c in collection if c["state"] == "owned")
+    released_count = sum(1 for c in collection if c["state"] != "locked")
+    all_collected = collected >= released_count and released_count > 0
+
+    return {
+        "active": pet_payload(active) if active else None,
+        "retired": [farm_row(p) for p in retired],
+        "retired_count": len(retired),
+        "total_spirits": len(pets),
+        "collection": collection,
+        "collected": collected,
+        "released_count": released_count,
+        "total_species": len(SPECIES),
+        # every released species is collected -> nothing new to adopt until the next drop
+        "all_collected": all_collected,
+    }
 
 
 # === Points Calculator ===
@@ -934,7 +1185,7 @@ def update_daily_points(daily, db):
         user.total_points = all_points
         # Award XP to pet: 10 total points = 1 XP (cumulative, cross-day)
         # Rate tuned 2026-09: was 25:1 — too slow now that decay is cheap to maintain
-        pet = db.query(Pet).filter(Pet.user_id == user.id).first()
+        pet = get_active_pet(db, user.id)
         if pet:
             checkpoint = pet.last_xp_checkpoint or 0
             earned = all_points // 10 - checkpoint // 10

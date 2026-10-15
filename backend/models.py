@@ -131,7 +131,8 @@ class Pet(Base):
     __tablename__ = "pets"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    # NOT unique: a user owns a collection (one active + retired spirits in the farm)
+    user_id = Column(Integer, ForeignKey("users.id"))
     name = Column(String, default="Pixel")
     xp = Column(Integer, default=0)
     level = Column(Integer, default=1)
@@ -140,6 +141,9 @@ class Pet(Base):
     last_fed = Column(DateTime, default=datetime.utcnow)
     last_played = Column(DateTime, default=datetime.utcnow)
     last_xp_checkpoint = Column(Integer, default=0)
+    species = Column(String, default="chicken")      # which spirit chain this is
+    is_active = Column(Boolean, default=True)        # ONE active pet per user
+    retired_at = Column(DateTime, nullable=True)     # set when it moves to the farm
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

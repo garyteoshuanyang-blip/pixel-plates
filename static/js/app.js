@@ -66,6 +66,7 @@ function goPage(name) {
   if (name === 'analytics') { loadChart(); loadMyFoodLog(); }
   if (name === 'myclients') { loadMyClients(); }
   if (name === 'clientdetail') { loadClientDetail(); }
+  if (name === 'farm') { loadFarm(); }
 }
 
 function showAuthTab(tab) {
@@ -1188,14 +1189,18 @@ async function loadPet() {
     document.getElementById('pet-card').style.display = 'block';
     document.getElementById('pet-name').textContent = p.name || 'Pixel';
     
-    // Stage 1-4 sprite
+    // Sprite + stage name come from the species config, so a new pet needs no JS change
     const stage = p.stage || 1;
-    document.getElementById('pet-sprite').src = `/static/images/pet-stage${stage}.png`;
-    
-    // Level badge
+    const sprite = p.sprite || `pet-stage${Math.min(stage, 4)}.png`;
+    document.getElementById('pet-sprite').src = `/static/images/${sprite}`;
+
+    // Level badge — the species' own stage name ("Baby duck", "Hatched tortoise", ...)
     const badge = document.getElementById('pet-level-badge');
-    const stageNames = {1: '🥚 Egg', 2: '🐣 Hatch', 3: '🐤 Chick', 4: '🐔 Adult'};
-    badge.textContent = stageNames[stage] || '🥚 Egg';
+    badge.textContent = p.stage_name || `Stage ${stage}`;
+
+    // "Adopt a New Spirit" appears once the extended bar past the final stage is full
+    const adoptBtn = document.getElementById('pet-adopt-btn');
+    if (adoptBtn) adoptBtn.style.display = p.new_spirit_unlocked ? 'block' : 'none';
     
     // XP bar — display xp / threshold_to_next_stage
     const totalNeeded = p.next_stage_at || 1;
@@ -1282,6 +1287,138 @@ async function renamePet() {
     }
   } catch(e) {}
   setTimeout(() => { document.getElementById('pet-status').textContent = ''; }, 3000);
+}
+
+// === FARM ===
+function _esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function loadFarm() {
+  if (!currentUser) return;
+  try {
+    const resp = await fetch(API + '/api/pet/farm/' + currentUser.user_id);
+    const f = await resp.json();
+    if (!resp.ok) return;
+
+    const active = f.active;
+    const retired = f.retired || [];
+
+    document.getElementById('farm-stats').textContent =
+      `${f.total_spirits} spirit${f.total_spirits === 1 ? '' : 's'}` +
+      (retired.length ? ` · ${retired.length} retired` : '');
+
+    // --- active spirit ---
+    const card = document.getElementById('farm-active-card');
+    if (active) {
+      card.style.display = 'block';
+      document.getElementById('farm-active-sprite').src = `/static/images/${active.sprite}`;
+      document.getElementById('farm-active-name').textContent = active.name || 'Pixel';
+      document.getElementById('farm-active-badge').textContent = active.stage_name || '';
+      document.getElementById('farm-active-sub').textContent =
+        `${active.species_label} · stage ${active.stage} of ${active.stages}`;
+      const pct = active.next_stage_at > 0
+        ? Math.min(100, (active.xp / active.next_stage_at) * 100) : 100;
+      document.getElementById('farm-xp-bar').style.width = pct + '%';
+      document.getElementById('farm-xp-text').textContent = `${active.xp}/${active.next_stage_at}`;
+    } else {
+      card.style.display = 'none';
+    }
+
+    // --- the album: every species, owned / silhouette / coming soon ---
+    document.getElementById('farm-collection-label').textContent =
+      `Collection (${f.collected} of ${f.released_count})`;
+    document.getElementById('farm-collection').innerHTML = (f.collection || []).map(x => {
+      if (x.state === 'owned') {
+        return `<div class="farm-tile">
+          <img class="sprite" src="/static/images/${_esc(x.sprite)}" style="height:62px" alt="">
+          <div class="farm-tile-name">${_esc(x.name)}</div>
+          <div class="farm-tile-species">${_esc(x.label)}</div>
+          <div class="farm-tile-stage">${_esc(x.stage_name)}</div>
+          ${x.is_active ? '<div class="farm-tile-active">ACTIVE</div>' : ''}
+        </div>`;
+      }
+      if (x.state === 'undiscovered') {
+        return `<div class="farm-tile">
+          <img class="sprite farm-silhouette" src="/static/images/${_esc(x.sprite)}" style="height:62px" alt="">
+          <div class="farm-tile-name">? ? ?</div>
+          <div class="farm-tile-species">not yet found</div>
+        </div>`;
+      }
+      return `<div class="farm-tile farm-soon">
+        <div class="farm-soon-mark">?</div>
+        <div class="farm-tile-name">Coming soon</div>
+        <div class="farm-tile-species">a new spirit</div>
+      </div>`;
+    }).join('');
+
+    // --- adopt button ---
+    const btn = document.getElementById('farm-adopt-btn');
+    const hint = document.getElementById('farm-adopt-hint');
+    if (active && active.new_spirit_unlocked && f.all_collected) {
+      // collected everything released — wait for the next drop
+      btn.disabled = true;
+      btn.style.background = 'var(--bg)';
+      btn.style.color = 'var(--text-dim)';
+      btn.style.boxShadow = 'none';
+      btn.style.border = '2px solid var(--border)';
+      btn.textContent = '🎉 All spirits collected';
+      hint.textContent = `${f.collected} of ${f.released_count} — a new spirit is coming soon`;
+    } else if (active && active.new_spirit_unlocked) {
+      // something new exists to collect — adopt is live
+      btn.disabled = false;
+      btn.style.background = 'var(--gold)';
+      btn.style.color = 'var(--bg)';
+      btn.style.boxShadow = '3px 3px 0 #8a7500';
+      btn.style.border = 'none';
+      btn.textContent = '🥚 Adopt a New Spirit';
+      hint.textContent = `Adopting retires ${active.name} to the farm (view-only)`;
+    } else if (active) {
+      btn.disabled = true;
+      btn.style.background = 'var(--bg)';
+      btn.style.color = 'var(--text-dim)';
+      btn.style.boxShadow = 'none';
+      btn.style.border = '2px solid var(--border)';
+      btn.textContent = `🔒 ${active.xp_to_next} XP to unlock`;
+      hint.textContent = active.at_final_stage
+        ? 'Final stage reached — fill the bar to unlock'
+        : `Unlocks after ${active.stage_name}`;
+    }
+  } catch (e) {
+    console.log('Farm load error:', e);
+  }
+}
+
+async function adoptSpirit() {
+  if (!currentUser) return;
+  const nm = document.getElementById('farm-active-name');
+  const who = (nm && nm.textContent) || 'your current spirit';
+  if (!confirm(`${who} will retire to the farm permanently — retired spirits can't be reactivated.\n\nHatch a new egg?`)) return;
+
+  const f = new FormData();
+  f.append('user_id', currentUser.user_id);
+  try {
+    const resp = await fetch(API + '/api/pet/adopt', { method: 'POST', body: f });
+    const d = await resp.json();
+    if (resp.ok) {
+      const status = document.getElementById('pet-status');
+      if (status) {
+        status.textContent = `🥚 Hatched! ${d.retired || who} retired to the farm.`;
+        status.style.color = 'var(--success)';
+        setTimeout(() => { status.textContent = ''; }, 5000);
+      }
+      loadPet();
+      loadFarm();
+      loadOverview();
+      if (document.getElementById('page-farm').classList.contains('active')) goPage('farm');
+    } else {
+      alert(d.detail || 'Could not adopt right now');
+      loadFarm();
+    }
+  } catch (e) {
+    alert('Error adopting — please try again');
+  }
 }
 
 // === TRAINER SUMMARY ===

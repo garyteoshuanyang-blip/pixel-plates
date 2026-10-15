@@ -157,6 +157,7 @@
           <button class="btn" style="flex:1;font-size:13px" onclick="feedPet()">🍗 Feed (5pts)</button>
           <button class="btn" style="flex:1;font-size:13px;background:var(--accent2)" onclick="playPet()">🎾 Play (5pts)</button>
         </div>
+        <button class="btn" id="pet-adopt-btn" style="display:none;margin-top:6px;background:var(--gold);color:var(--bg);box-shadow:3px 3px 0 #8a7500" onclick="adoptSpirit()">🥚 Adopt a New Spirit</button>
         <p id="pet-status" class="goal-label" style="margin-top:4px"></p>
       </div>
 
@@ -388,13 +389,49 @@
       </div>
     </div>
 
+    <!-- ═══ FARM PAGE ═══ -->
+    <div id="page-farm" class="page">
+      <div class="page-header">
+        <span>🚜 Farm</span>
+        <span class="top-stats" id="farm-stats"></span>
+      </div>
+
+      <div class="card" id="farm-active-card" style="display:none">
+        <h2>Active Spirit</h2>
+        <div class="farm-active">
+          <img id="farm-active-sprite" class="sprite" src="" style="height:96px">
+          <div class="farm-active-info">
+            <div class="farm-active-name">
+              <span id="farm-active-name">—</span>
+              <span class="pet-badge" id="farm-active-badge"></span>
+            </div>
+            <div class="farm-active-sub" id="farm-active-sub"></div>
+            <div class="pet-bar-row">
+              <span class="pet-bar-label">⚡ XP</span>
+              <div class="pet-bar-bg"><div id="farm-xp-bar" class="pet-bar-fill" style="width:0%"></div></div>
+              <span id="farm-xp-text" class="pet-bar-val">0/0</span>
+            </div>
+          </div>
+        </div>
+        <div class="farm-hint farm-tap" onclick="goPage('overview')">Tap to feed &amp; play →</div>
+      </div>
+
+      <div class="farm-section-label" id="farm-collection-label">Collection</div>
+      <div id="farm-collection" class="farm-grid"></div>
+
+      <div class="farm-section-label">Next spirit</div>
+      <button class="btn" id="farm-adopt-btn" onclick="adoptSpirit()">—</button>
+      <div class="farm-hint" id="farm-adopt-hint"></div>
+    </div>
+
     <!-- Bottom Nav -->
     <div class="bottom-nav">
-      <button class="nav-btn active" data-page="overview" onclick="goPage('overview')">📊 Overview</button>
-      <button class="nav-btn" data-page="leaderboard" onclick="goPage('leaderboard')">🏆 Leaderboard</button>
+      <button class="nav-btn active" data-page="overview" onclick="goPage('overview')">📊 Home</button>
+      <button class="nav-btn" data-page="leaderboard" onclick="goPage('leaderboard')">🏆 Ranks</button>
       <button class="nav-btn" id="nav-myclients" data-page="myclients" onclick="goPage('myclients')" style="display:none">👥 Clients</button>
       <button class="nav-btn" data-page="analytics" onclick="goPage('analytics')">📈 Trends</button>
-      <button class="nav-btn" data-page="profile" onclick="goPage('profile')">👤 Profile</button>
+      <button class="nav-btn" data-page="farm" onclick="goPage('farm')">🚜 Farm</button>
+      <button class="nav-btn" data-page="profile" onclick="goPage('profile')">👤 Me</button>
     </div>
   </div>
 </div>
