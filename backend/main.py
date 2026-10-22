@@ -1426,6 +1426,18 @@ async def create_meal(
     # Use AI estimate or user-provided value or DB lookup
     final_calories = calories if calories is not None else (db_food.calories if db_food else ai_calories)
 
+    # One source of truth for the note shown on the meal — a failed AI call must be
+    # VISIBLE to the user, never saved as a silent zero. But do NOT warn when the
+    # user supplied the values themselves: nothing failed in that case.
+    if db_food and db_food.is_verified:
+        nutrition_note = "From food database ✓"
+    elif calories is not None:
+        nutrition_note = ""
+    elif result.get("error"):
+        nutrition_note = "⚠️ AI unavailable — no estimate, please log this manually"
+    else:
+        nutrition_note = result.get("comment", "")
+
     meal = Meal(
         user_id=user_id,
         photo_path=photo_path,
@@ -1441,7 +1453,7 @@ async def create_meal(
         user_fat=fat,
         user_fiber=fiber,
         notes=notes,
-        nutrition_comment=db_food and db_food.is_verified and "From food database ✓" or result.get("comment", ""),
+        nutrition_comment=nutrition_note,
     )
     db.add(meal)
 
@@ -1502,7 +1514,7 @@ async def create_meal(
         "fat": meal.user_fat or meal.ai_fat or 0,
         "fiber": meal.user_fiber or meal.ai_fiber or 0,
         "ai_calories": ai_calories,
-        "nutrition_comment": result.get("comment", ""),
+        "nutrition_comment": nutrition_note,
         "daily_total": daily.total_calories,
         "daily_protein": daily.total_protein,
         "daily_carbs": daily.total_carbs,

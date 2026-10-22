@@ -24,7 +24,9 @@ async def analyze_food_photo(image_path: str) -> dict:
     - Receipt / order list: list food items + estimate macros
     """
     if not OPENROUTER_API_KEY:
-        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": [], "scan_type": "unknown"}
+        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0,
+                "foods": [], "scan_type": "unknown", "comment": "",
+                "error": "OPENROUTER_API_KEY is not configured"}
 
     with open(image_path, "rb") as f:
         image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -147,7 +149,8 @@ async def adjust_meal_nutrition(meal_name: str, current_calories: float, current
 
 async def analyze_food_text(food_description: str) -> dict:
     if not OPENROUTER_API_KEY:
-        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0, "foods": []}
+        return {"total_calories": 0, "protein_g": 0, "carbs_g": 0, "fat_g": 0, "fiber_g": 0,
+                "foods": [], "comment": "", "error": "OPENROUTER_API_KEY is not configured"}
 
     prompt = (
         f"Estimate the nutrition for: '{food_description}'. "
