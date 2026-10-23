@@ -178,6 +178,61 @@ def check_and_migrate():
     except Exception as e:
         print(f"⚠️ Food seed check skipped: {e}")
 
+    # --- One-time data repair: spirits that inherited the user's lifetime XP ---
+    # Pets adopted after the first (duck/tortoise) were created with a 0 XP
+    # checkpoint, so their first recalculation credited the user's ENTIRE lifetime
+    # score — egg -> final stage after a single meal log. Reset them to a fresh egg.
+    # Guarded by a schema_migrations row so it can never fire twice.
+    try:
+        from sqlalchemy import text as sql_text_fix
+        with engine.begin() as conn_fix:
+            conn_fix.execute(sql_text_fix("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    name VARCHAR PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            already = conn_fix.execute(sql_text_fix(
+                "SELECT 1 FROM schema_migrations WHERE name = 'reset_inherited_pet_xp'"
+            )).fetchone()
+
+        if already:
+            print("✅ reset_inherited_pet_xp already applied")
+        else:
+            with engine.begin() as conn_fix:
+                rows = conn_fix.execute(sql_text_fix("""
+                    SELECT p.id, p.user_id, p.species, p.xp, p.happiness, p.hunger
+                    FROM pets p
+                    WHERE p.species IN ('duck', 'tortoise')
+                """)).fetchall()
+                print(f"🔧 reset_inherited_pet_xp: {len(rows)} spirit(s) affected")
+                for r in rows:
+                    total = conn_fix.execute(sql_text_fix(
+                        "SELECT COALESCE(SUM(total_points), 0) FROM daily_logs WHERE user_id = :uid"
+                    ), {"uid": r[1]}).scalar() or 0
+                    print(f"   pet {r[0]} (user {r[1]}, {r[2]}): xp {r[3]} -> 0, "
+                          f"happiness {r[4]} -> 100, hunger {r[5]} -> 100, checkpoint -> {total}")
+                conn_fix.execute(sql_text_fix("""
+                    UPDATE pets
+                    SET xp = 0,
+                        level = 1,
+                        happiness = 100,
+                        hunger = 100,
+                        last_fed = CURRENT_TIMESTAMP,
+                        last_played = CURRENT_TIMESTAMP,
+                        last_xp_checkpoint = (
+                            SELECT COALESCE(SUM(d.total_points), 0)
+                            FROM daily_logs d WHERE d.user_id = pets.user_id
+                        )
+                    WHERE species IN ('duck', 'tortoise')
+                """))
+                conn_fix.execute(sql_text_fix(
+                    "INSERT INTO schema_migrations (name) VALUES ('reset_inherited_pet_xp')"
+                ))
+            print("✅ Reset duck/tortoise spirits to fresh eggs")
+    except Exception as e:
+        print(f"⚠️ reset_inherited_pet_xp skipped: {e}")
+
 
 @app.on_event("startup")
 async def startup():
