@@ -935,7 +935,8 @@ async def create_pet(user_id: int, db: Session = Depends(get_db)):
     existing = get_active_pet(db, user_id)
     if existing:
         return await get_pet_data(user_id, db)
-    pet = Pet(user_id=user_id, name="Pixel", species=DEFAULT_SPECIES, is_active=True)
+    pet = Pet(user_id=user_id, name="Pixel", species=DEFAULT_SPECIES, is_active=True,
+              last_xp_checkpoint=lifetime_points(db, user_id))
     db.add(pet)
     db.commit()
     db.refresh(pet)
@@ -1046,7 +1047,10 @@ async def adopt_spirit(user_id: int = Form(...), species: str = Form(None), db: 
     spec = species_def(pick)
     new_pet = Pet(
         user_id=user_id, name=spec["label"], species=pick, is_active=True,
-        xp=0, level=1, happiness=100, hunger=100, last_xp_checkpoint=0,
+        xp=0, level=1, happiness=100, hunger=100,
+        # Start the XP baseline at the user's CURRENT lifetime score, so the new
+        # spirit begins at 0 XP instead of inheriting every point already earned.
+        last_xp_checkpoint=lifetime_points(db, user_id),
     )
     db.add(new_pet)
     db.commit()
@@ -1169,6 +1173,18 @@ def calculate_daily_points(daily_log):
     return total, cal_p, pro_p, carb_p, fat_p
 
 
+def lifetime_points(db, user_id: int) -> int:
+    """The user's all-time point total.
+
+    A new spirit starts its XP checkpoint HERE, never at 0. `update_daily_points`
+    awards XP as `lifetime // 10 - checkpoint // 10`, so a newborn pet with a 0
+    checkpoint is credited the user's ENTIRE lifetime score on its first
+    recalculation — racing egg → adult in a single meal log.
+    """
+    return db.query(func.sum(DailyLog.total_points)).filter(
+        DailyLog.user_id == user_id).scalar() or 0
+
+
 def update_daily_points(daily, db):
     """Recalculate and persist points on a daily log."""
     user = db.query(User).filter(User.id == daily.user_id).first()
@@ -1181,13 +1197,19 @@ def update_daily_points(daily, db):
     daily.points_fat = fat_p
     daily.total_points = total
     if user:
-        all_points = db.query(func.sum(DailyLog.total_points)).filter(DailyLog.user_id == user.id).scalar() or 0
+        all_points = lifetime_points(db, user.id)
         user.total_points = all_points
         # Award XP to pet: 10 total points = 1 XP (cumulative, cross-day)
         # Rate tuned 2026-09: was 25:1 — too slow now that decay is cheap to maintain
         pet = get_active_pet(db, user.id)
         if pet:
             checkpoint = pet.last_xp_checkpoint or 0
+            # Self-heal spirits created before the baseline was initialised: a pet
+            # that has earned nothing yet must not be handed the user's lifetime
+            # score. Adopt the current total as its starting line instead.
+            if checkpoint == 0 and (pet.xp or 0) == 0 and all_points > 0:
+                checkpoint = all_points
+                pet.last_xp_checkpoint = all_points
             earned = all_points // 10 - checkpoint // 10
             if earned > 0:
                 pet.xp += earned
