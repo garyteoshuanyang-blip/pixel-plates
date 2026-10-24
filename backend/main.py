@@ -233,6 +233,87 @@ def check_and_migrate():
     except Exception as e:
         print(f"⚠️ reset_inherited_pet_xp skipped: {e}")
 
+    # --- One-time clean-up: remove the reset spirits from collections ---
+    # After reset_inherited_pet_xp, the duck/tortoise rows STILL counted as
+    # "owned" (the album keys off the mere existence of a row), so those users
+    # showed 3/3 and the adopt gate refused to let them adopt again. The reset
+    # spirits were never legitimately earned, so remove them: the species return
+    # to "not yet found" and can be re-adopted from a clean egg.
+    # Only spirits created BEFORE the reset ran are removed — a duck adopted
+    # legitimately afterwards is kept.
+    try:
+        from sqlalchemy import text as sql_text_clean
+        with engine.begin() as conn_clean:
+            conn_clean.execute(sql_text_clean("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    name VARCHAR PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            done = conn_clean.execute(sql_text_clean(
+                "SELECT 1 FROM schema_migrations WHERE name = 'purge_reset_spirits'"
+            )).fetchone()
+
+        if done:
+            print("✅ purge_reset_spirits already applied")
+        else:
+            with engine.begin() as conn_clean:
+                cutoff = conn_clean.execute(sql_text_clean(
+                    "SELECT applied_at FROM schema_migrations WHERE name = 'reset_inherited_pet_xp'"
+                )).scalar()
+
+                if cutoff is None:
+                    # No reset on record — refuse to guess, or we would delete
+                    # every legitimate duck and tortoise.
+                    print("⚠️ purge_reset_spirits: reset migration not found — skipping")
+                else:
+                    doomed = conn_clean.execute(sql_text_clean("""
+                        SELECT id, user_id, name, species, xp, created_at
+                        FROM pets
+                        WHERE species IN ('duck', 'tortoise')
+                          AND created_at < :cutoff
+                    """), {"cutoff": cutoff}).fetchall()
+
+                    print(f"🔧 purge_reset_spirits: {len(doomed)} spirit(s) to remove")
+                    for r in doomed:
+                        print(f"   pet {r[0]} (user {r[1]}, {r[3]}) name={r[2]!r} "
+                              f"xp={r[4]} created={r[5]}")
+
+                    if doomed:
+                        ids = [int(r[0]) for r in doomed]
+                        users = sorted({int(r[1]) for r in doomed})
+                        conn_clean.execute(sql_text_clean(
+                            "DELETE FROM pets WHERE id IN (" + ",".join(str(i) for i in ids) + ")"
+                        ))
+                        # Those users' active spirit was the duck/tortoise we just
+                        # removed. Re-activate their best chicken so they keep
+                        # raising something instead of the app minting a duplicate.
+                        for uid in users:
+                            has_active = conn_clean.execute(sql_text_clean(
+                                "SELECT 1 FROM pets WHERE user_id = :uid AND is_active = TRUE LIMIT 1"
+                            ), {"uid": uid}).fetchone()
+                            if has_active:
+                                continue
+                            chicken = conn_clean.execute(sql_text_clean("""
+                                SELECT id FROM pets
+                                WHERE user_id = :uid AND species = 'chicken'
+                                ORDER BY xp DESC LIMIT 1
+                            """), {"uid": uid}).fetchone()
+                            if chicken:
+                                conn_clean.execute(sql_text_clean(
+                                    "UPDATE pets SET is_active = TRUE, retired_at = NULL WHERE id = :pid"
+                                ), {"pid": int(chicken[0])})
+                                print(f"   user {uid}: re-activated chicken pet {chicken[0]}")
+                            else:
+                                print(f"   user {uid}: no chicken — app will create one")
+
+                    conn_clean.execute(sql_text_clean(
+                        "INSERT INTO schema_migrations (name) VALUES ('purge_reset_spirits')"
+                    ))
+            print("✅ Purged reset spirits from collections")
+    except Exception as e:
+        print(f"⚠️ purge_reset_spirits skipped: {e}")
+
 
 @app.on_event("startup")
 async def startup():
