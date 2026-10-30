@@ -23,21 +23,11 @@ function fmt(n) {
     try {
       currentUser = JSON.parse(saved);
       currentToken = currentUser.token;
-      if (currentUser.role === 'trainer') {
-        showScreen('app');
-        goPage('overview');
-        const clientsBtn = document.getElementById('nav-myclients');
-        if (clientsBtn) clientsBtn.style.display = 'block';
-      } else if (currentUser.approved) {
-        if (currentUser.onboarded) {
-          showScreen('app');
-          goPage('overview');
-        } else {
-          showScreen('onboard');
-        }
-      } else {
-        showScreen('pending');
-      }
+      // Render from cache immediately so there's no flash, THEN re-validate against
+      // the server. Without this, a stale `approved: false` (or a revoked approval)
+      // survives every browser refresh and only clears on a fresh login.
+      applyCachedScreen();
+      revalidateUser();
     } catch(e) { localStorage.removeItem('pixelplates_user'); }
   }
   // Goal change listener — show/hide custom adjustment
@@ -48,6 +38,44 @@ function fmt(n) {
     });
   }
 })();
+
+// Choose the screen from whatever we currently know about the user.
+function applyCachedScreen() {
+  if (!currentUser) return;
+  if (currentUser.role === 'trainer') {
+    showScreen('app');
+    goPage('overview');
+    const clientsBtn = document.getElementById('nav-myclients');
+    if (clientsBtn) clientsBtn.style.display = 'block';
+  } else if (currentUser.approved) {
+    if (currentUser.onboarded) {
+      showScreen('app');
+      goPage('overview');
+    } else {
+      showScreen('onboard');
+    }
+  } else {
+    showScreen('pending');
+  }
+}
+
+// Ask the server for the authoritative approval / onboarding state. This is what
+// makes approval take effect on a plain refresh instead of needing a fresh login.
+async function revalidateUser() {
+  if (!currentUser || !currentUser.user_id) return;
+  try {
+    const ur = await fetch(API + '/api/user/' + currentUser.user_id);
+    if (!ur.ok) return;
+    const ud = await ur.json();
+    const wasPending = !currentUser.approved;
+    currentUser.approved = ud.approved;
+    currentUser.role = ud.role || currentUser.role;
+    currentUser.onboarded = ud.onboarded;
+    localStorage.setItem('pixelplates_user', JSON.stringify(currentUser));
+    // Newly approved (or newly onboarded) — move them along without a manual tap.
+    if (!wasPending || ud.approved) applyCachedScreen();
+  } catch(e) { /* offline — keep showing the cached view */ }
+}
 
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -103,10 +131,19 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
     const resp = await fetch(API + '/api/auth/register', { method: 'POST', body: f });
     const data = await resp.json();
     if (!resp.ok) { document.getElementById('reg-error').textContent = data.detail || 'Failed'; return; }
-    const lf = new FormData(); lf.append('email', email); lf.append('password', password);
-    const lr = await fetch(API + '/api/auth/login', { method: 'POST', body: lf });
-    const ld = await lr.json();
-    if (lr.ok) {
+
+    // The register response already tells us the approval state — do NOT depend on a
+    // follow-up login. Unapproved clients get HTTP 403 by design, so the old code's
+    // `if (lr.ok)` was never true and the pending screen silently never appeared.
+    if (data.role === 'trainer' || data.approved) {
+      const lf = new FormData(); lf.append('email', email); lf.append('password', password);
+      const lr = await fetch(API + '/api/auth/login', { method: 'POST', body: lf });
+      if (!lr.ok) {
+        regErr.textContent = 'Account created — please log in.';
+        regErr.style.color = 'var(--success)';
+        return;
+      }
+      const ld = await lr.json();
       currentUser = ld; currentToken = ld.token; currentUser.name = name;
       currentUser.approved = ld.approved;
       currentUser.role = ld.role;
@@ -117,11 +154,21 @@ document.getElementById('register-form').addEventListener('submit', async (e) =>
         showScreen('onboard');
         const clientsBtn = document.getElementById('nav-myclients');
         if (clientsBtn) clientsBtn.style.display = 'block';
-      } else if (ld.approved) {
-        showScreen('onboard');
       } else {
-        showScreen('pending');
+        showScreen('onboard');
       }
+    } else {
+      // Brand-new client awaiting approval. Store the identity (note: register returns
+      // `id`, login returns `user_id` — the pending screen's re-check needs user_id)
+      // and show the pending screen immediately.
+      currentUser = {
+        user_id: data.id, name: name, email: email,
+        role: data.role, approved: false,
+      };
+      currentToken = null;
+      localStorage.setItem('pixelplates_user', JSON.stringify(currentUser));
+      regErr.textContent = '';
+      showScreen('pending');
     }
   } catch(e) { document.getElementById('reg-error').textContent = 'Connection error'; }
 });
