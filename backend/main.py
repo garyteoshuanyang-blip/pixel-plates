@@ -2,7 +2,7 @@
 import os
 import uuid
 from datetime import date, datetime, timezone, timedelta
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Request, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 SGT = timezone(timedelta(hours=8))
@@ -1948,11 +1948,19 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
 
 # === History ===
 @app.get("/api/history/{user_id}")
-async def get_history(user_id: int, period: str = "week", db: Session = Depends(get_db)):
+async def get_history(
+    user_id: int,
+    range: str = Query(None),
+    period: str = Query(None),
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(404)
-    from datetime import timedelta
+    # The app sends `range`; older callers may send `period`. Accept both — this
+    # endpoint previously declared only `period`, so `?range=month` was ignored and
+    # every view silently fell back to a week of data.
+    period = range or period or "week"
     today = datetime.now(SGT).date()
     if period == "week":
         start = today - timedelta(days=7)
@@ -1971,6 +1979,40 @@ async def get_history(user_id: int, period: str = "week", db: Session = Depends(
         DailyLog.date >= start,
         DailyLog.date <= today,
     ).order_by(DailyLog.date.asc()).all()
+
+    # A year of daily logs is ~365 points — at ~1px per bar that is unreadable, and
+    # every label repeats. Collapse the year view to one bar per month, using the
+    # month's daily AVERAGE so the goal line stays meaningful.
+    if period == "year":
+        buckets = {}
+        order = []
+        for log in logs:
+            if not log.date:
+                continue
+            key = log.date.strftime("%Y-%m")
+            if key not in buckets:
+                buckets[key] = {"cal": 0.0, "goal": 0.0, "n": 0, "met": 0}
+                order.append(key)
+            b = buckets[key]
+            b["cal"] += log.total_calories or 0
+            b["goal"] += log.goal_calories or 0
+            b["n"] += 1
+            if log.goal_met:
+                b["met"] += 1
+        out = []
+        for key in order:
+            b = buckets[key]
+            n = max(b["n"], 1)
+            out.append({
+                "date": key + "-01",
+                "label": datetime.strptime(key + "-01", "%Y-%m-%d").strftime("%b"),
+                "calories": round(b["cal"] / n, 1),
+                "protein": 0, "carbs": 0, "fat": 0,
+                "goal": round(b["goal"] / n, 1),
+                "goal_met": b["met"] > (b["n"] / 2),
+            })
+        return out
+
     return [{
         "date": str(log.date),
         "label": log.date.strftime(label_format) if log.date else "",
