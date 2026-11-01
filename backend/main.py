@@ -1980,16 +1980,17 @@ async def get_history(
         DailyLog.date <= today,
     ).order_by(DailyLog.date.asc()).all()
 
-    # A year of daily logs is ~365 points — at ~1px per bar that is unreadable, and
-    # every label repeats. Collapse the year view to one bar per month, using the
-    # month's daily AVERAGE so the goal line stays meaningful.
-    if period == "year":
-        buckets = {}
-        order = []
+    # Daily bars stop being readable once the window gets long: a month is ~30 skinny
+    # bars and a year is ~365 slivers with repeating labels. Collapse them into
+    # buckets — one bar per week for the month view, one per month for the year view.
+    # Each bar uses the bucket's daily AVERAGE so the goal line stays meaningful, and
+    # is marked goal_met when MOST days in it hit goal.
+    def bucket_summary(key_of, label_of):
+        buckets, order = {}, []
         for log in logs:
             if not log.date:
                 continue
-            key = log.date.strftime("%Y-%m")
+            key = key_of(log.date)
             if key not in buckets:
                 buckets[key] = {"cal": 0.0, "goal": 0.0, "n": 0, "met": 0}
                 order.append(key)
@@ -2004,14 +2005,28 @@ async def get_history(
             b = buckets[key]
             n = max(b["n"], 1)
             out.append({
-                "date": key + "-01",
-                "label": datetime.strptime(key + "-01", "%Y-%m-%d").strftime("%b"),
+                "date": key,
+                "label": label_of(key),
                 "calories": round(b["cal"] / n, 1),
                 "protein": 0, "carbs": 0, "fat": 0,
                 "goal": round(b["goal"] / n, 1),
                 "goal_met": b["met"] > (b["n"] / 2),
             })
         return out
+
+    if period == "month":
+        # One bar per calendar week (Monday start), labelled by the week's first day.
+        return bucket_summary(
+            lambda d: str(d - timedelta(days=d.weekday())),
+            lambda k: datetime.strptime(k, "%Y-%m-%d").strftime("%d %b"),
+        )
+
+    if period == "year":
+        # One bar per calendar month.
+        return bucket_summary(
+            lambda d: d.strftime("%Y-%m") + "-01",
+            lambda k: datetime.strptime(k, "%Y-%m-%d").strftime("%b"),
+        )
 
     return [{
         "date": str(log.date),

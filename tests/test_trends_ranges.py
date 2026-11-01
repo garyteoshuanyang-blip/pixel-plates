@@ -45,11 +45,14 @@ print(f"     status {code}, {len(wk)} points, first={wk[0]['date']} label={wk[0]
 check("week returns ~8 points", 7 <= len(wk) <= 9, len(wk))
 check("week labels are weekday names", len(wk[0]["label"]) == 3, wk[0]["label"])
 
-print("\n2. range=month")
+print("\n2. range=month  (now WEEKLY buckets)")
 _, mo = get("?range=month")
-print(f"     {len(mo)} points, first={mo[0]['date']} label={mo[0]['label']}")
-check("month returns ~31 points", 29 <= len(mo) <= 32, len(mo))
+print(f"     {len(mo)} points, labels={[p['label'] for p in mo]}")
+check("month returns ~5 weekly bars", 4 <= len(mo) <= 7, len(mo))
+check("month labels are dates (DD Mon)", len(mo[0]['label'].split()) == 2, mo[0]['label'])
 check("month differs from week", len(mo) != len(wk), (len(mo), len(wk)))
+check("month bars are daily averages not sums", all(p["calories"] < 3000 for p in mo),
+      [p["calories"] for p in mo])
 
 print("\n3. range=year")
 _, yr = get("?range=year")
@@ -62,6 +65,8 @@ check("year values are monthly averages (not sums)", all(p["calories"] < 3000 fo
 print("\n4. legacy ?period= still works (backwards compatible)")
 _, lp = get("?period=month")
 check("period=month behaves like range=month", len(lp) == len(mo), (len(lp), len(mo)))
+_, ly = get("?period=year")
+check("period=year behaves like range=year", len(ly) == len(yr), (len(ly), len(yr)))
 
 print("\n5. no param defaults to week")
 _, dflt = get("")
