@@ -782,22 +782,30 @@ async function loadChart() {
   try {
     const resp = await fetch(API + `/api/history/${currentUser.user_id}?range=${chartRange}`);
     const data = await resp.json();
-    if (!data.length) {
-      document.getElementById('chart-summary').textContent = 'No data yet in this period';
-      return;
-    }
     const canvas = document.getElementById('chart-canvas');
     const ctx = canvas.getContext('2d');
     const w = canvas.width, h = canvas.height;
 
+    // Clear FIRST — an empty period must not leave the previous period's chart
+    // sitting on the canvas under the new label.
     ctx.clearRect(0, 0, w, h);
+
+    if (!data.length) {
+      document.getElementById('chart-summary').textContent = 'No data yet in this period';
+      return;
+    }
 
     // Draw bars
     const barCount = data.length;
-    const barW = Math.min(20, (w - 30) / barCount);
-    const maxCals = Math.max(...data.map(d => d.goal), 1);
+    // Spread the bars evenly across the full canvas. A fixed bar width with a fixed
+    // pitch bunched them at the left (5 bars ≈ 130px of a 440px canvas) and made
+    // labels like "28 Sep" overlap their neighbour — the week view only escaped it
+    // because "Mon"/"Tue" are short.
     const pad = 20, bottom = h - pad, topPad = 10;
     const chartH = h - pad - topPad;
+    const slot = (w - pad * 2) / barCount;
+    const barW = Math.max(3, Math.min(24, slot * 0.62));
+    const maxCals = Math.max(...data.map(d => d.goal), 1);
 
     // Draw baseline
     ctx.fillStyle = '#334455';
@@ -822,19 +830,26 @@ async function loadChart() {
     ctx.textAlign = 'right';
     ctx.fillText('goal', w - 5, goalLineY - 2);
 
+    let lastLabelRight = -Infinity;
     data.forEach((d, i) => {
-      const x = pad + i * (barW + 2);
+      const x = pad + i * slot + (slot - barW) / 2;
       const calH = (d.calories / maxCals) * chartH;
 
       // Calorie bar
       ctx.fillStyle = d.goal_met ? '#4ade80' : '#e94560';
       ctx.fillRect(x, bottom - calH, barW, Math.max(calH, 1));
 
-      // Label
+      // Label — centred on its bar, skipped when it would collide with the previous
+      // one (guards narrow canvases and long labels at 12 bars).
       ctx.fillStyle = '#8899aa';
       ctx.font = '8px Inter';
       ctx.textAlign = 'center';
-      ctx.fillText(d.label, x + barW / 2, h - 4);
+      const cw = ctx.measureText(d.label).width;
+      const cx = x + barW / 2;
+      if (cx - cw / 2 > lastLabelRight + 2) {
+        ctx.fillText(d.label, cx, h - 4);
+        lastLabelRight = cx + cw / 2;
+      }
     });
 
     // Summary
