@@ -1950,7 +1950,7 @@ async def get_dashboard(user_id: int, db: Session = Depends(get_db)):
 @app.get("/api/history/{user_id}")
 async def get_history(
     user_id: int,
-    range: str = Query(None),
+    range_: str = Query(None, alias="range"),
     period: str = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -1960,10 +1960,13 @@ async def get_history(
     # The app sends `range`; older callers may send `period`. Accept both — this
     # endpoint previously declared only `period`, so `?range=month` was ignored and
     # every view silently fell back to a week of data.
-    period = range or period or "week"
+    # NOTE: the query param is aliased to range_ because a local named `range` would
+    # shadow the builtin used further down.
+    period = range_ or period or "week"
     today = datetime.now(SGT).date()
     if period == "week":
-        start = today - timedelta(days=7)
+        # Exactly 7 bars: today and the 6 days before it.
+        start = today - timedelta(days=6)
         label_format = "%a"
     elif period == "month":
         start = today - timedelta(days=30)
@@ -1972,7 +1975,7 @@ async def get_history(
         start = today - timedelta(days=365)
         label_format = "%b"
     else:
-        start = today - timedelta(days=7)
+        start = today - timedelta(days=6)
         label_format = "%a"
     logs = db.query(DailyLog).filter(
         DailyLog.user_id == user_id,
@@ -2022,22 +2025,52 @@ async def get_history(
         )
 
     if period == "year":
-        # One bar per calendar month.
-        return bucket_summary(
+        # One bar per calendar month, ALWAYS 12 — months with no logs render as gaps
+        # so the x-axis is stable month to month.
+        rows = bucket_summary(
             lambda d: d.strftime("%Y-%m") + "-01",
             lambda k: datetime.strptime(k, "%Y-%m-%d").strftime("%b"),
         )
+        by_key = {r["date"]: r for r in rows}
+        avg_goal = (sum(r["goal"] for r in rows) / len(rows)) if rows else 0
+        out = []
+        for i in range(11, -1, -1):
+            y, m = today.year, today.month - i
+            while m <= 0:
+                m += 12
+                y -= 1
+            key = f"{y:04d}-{m:02d}-01"
+            row = by_key.get(key)
+            if row is None:
+                row = {
+                    "date": key,
+                    "label": datetime.strptime(key, "%Y-%m-%d").strftime("%b"),
+                    "calories": 0, "protein": 0, "carbs": 0, "fat": 0,
+                    "goal": round(avg_goal, 1), "goal_met": False,
+                }
+            out.append(row)
+        return out
 
-    return [{
-        "date": str(log.date),
-        "label": log.date.strftime(label_format) if log.date else "",
-        "calories": log.total_calories or 0,
-        "protein": log.total_protein or 0,
-        "carbs": log.total_carbs or 0,
-        "fat": log.total_fat or 0,
-        "goal": log.goal_calories or 0,
-        "goal_met": log.goal_met or False,
-    } for log in logs]
+    # Week: ALWAYS exactly 7 bars — today and the 6 days before. Days with no log
+    # render as zero-height gaps, so the chart is a stable week every time.
+    by_date = {log.date: log for log in logs if log.date}
+    goals = [log.goal_calories for log in logs if log.goal_calories]
+    avg_goal = (sum(goals) / len(goals)) if goals else 0
+    out = []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        log = by_date.get(d)
+        out.append({
+            "date": str(d),
+            "label": d.strftime(label_format),
+            "calories": (log.total_calories or 0) if log else 0,
+            "protein": (log.total_protein or 0) if log else 0,
+            "carbs": (log.total_carbs or 0) if log else 0,
+            "fat": (log.total_fat or 0) if log else 0,
+            "goal": (log.goal_calories or 0) if log else round(avg_goal, 1),
+            "goal_met": bool(log.goal_met) if log else False,
+        })
+    return out
 
 
 # === Shop ===

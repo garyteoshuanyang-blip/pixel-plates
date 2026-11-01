@@ -42,7 +42,7 @@ def get(qs):
 print("\n1. range=week  (the existing behaviour — must not regress)")
 code, wk = get("?range=week")
 print(f"     status {code}, {len(wk)} points, first={wk[0]['date']} label={wk[0]['label']}")
-check("week returns ~8 points", 7 <= len(wk) <= 9, len(wk))
+check("week is EXACTLY 7 bars", len(wk) == 7, len(wk))
 check("week labels are weekday names", len(wk[0]["label"]) == 3, wk[0]["label"])
 
 print("\n2. range=month  (now WEEKLY buckets)")
@@ -57,7 +57,7 @@ check("month bars are daily averages not sums", all(p["calories"] < 3000 for p i
 print("\n3. range=year")
 _, yr = get("?range=year")
 print(f"     {len(yr)} points, labels={[p['label'] for p in yr]}")
-check("year is aggregated to months (~13)", 12 <= len(yr) <= 14, len(yr))
+check("year is EXACTLY 12 bars", len(yr) == 12, len(yr))
 check("year is NOT 365 daily bars", len(yr) < 100, len(yr))
 check("year values are monthly averages (not sums)", all(p["calories"] < 3000 for p in yr),
       [p["calories"] for p in yr][:5])
@@ -76,6 +76,13 @@ print("\n6. all three windows are DIFFERENT (the actual bug)")
 check("week != month", len(wk) != len(mo))
 check("week != year", len(wk) != len(yr))
 check("month != year", len(mo) != len(yr))
+
+print("\n7. stable axis — gaps are filled, not skipped")
+check("week has no missing days (7 bars despite sparse logging)", len(wk) == 7, len(wk))
+check("year has no missing months (12 bars)", len(yr) == 12, len(yr))
+zero_wk = [p for p in wk if p["calories"] == 0]
+zero_yr = [p for p in yr if p["calories"] == 0]
+print(f"     zero-filled bars -> week: {len(zero_wk)}, year: {len(zero_yr)}")
 
 print("\n" + "=" * 60)
 print(f"RESULT: {'ALL PASSED' if not fails else str(len(fails)) + ' FAILED: ' + ', '.join(fails)}")
